@@ -9,14 +9,15 @@ const SIDES = [
 ] as const
 
 const handleClass = cn(
-  '!h-2.5 !w-2.5 !rounded-full !border-2 !border-[var(--color-border)] !bg-[var(--color-surface)]',
-  'opacity-60 transition-all group-hover/node:!opacity-100',
-  'hover:!scale-125 hover:!border-[var(--color-accent)] hover:!bg-[var(--color-accent)]',
+  '!h-2 !w-2 !rounded-full !border-2 !border-[var(--color-border)] !bg-[var(--color-surface)]',
+  '!opacity-0 transition-all duration-150',
+  'group-hover/node:!opacity-80 group-hover/node:!scale-100',
+  'hover:!opacity-100 hover:!scale-125 hover:!border-[var(--color-accent)] hover:!bg-[var(--color-accent)]',
 )
 
 /**
- * Ports on all four sides. Combined with ConnectionMode.Loose, any port can
- * start or end a link — so one rectangle can take many connections.
+ * Four side ports. Loose connection mode lets any port start or finish a link.
+ * Handles stay hidden until the node is hovered so the diagram stays calm.
  */
 export function NodeHandles() {
   return (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   ConnectionMode,
   ReactFlow,
   ReactFlowProvider,
@@ -119,7 +120,10 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       }),
     [nodes, dragPositions, selectedIds, remoteSelection],
   )
-  const flowEdges = useMemo(() => edges.map(toFlowEdge), [edges])
+  const flowEdges = useMemo(
+    () => edges.map((edge) => toFlowEdge(edge, nodes, edges)),
+    [edges, nodes],
+  )
 
   // Drop stale drag overlays when the store node set changes (import / undo / delete).
   useEffect(() => {
@@ -193,6 +197,15 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     (connection: Connection) => {
       if (!project || !connection.source || !connection.target) return
       if (connection.source === connection.target) return
+      // One directed link per pair keeps diagrams readable; rewire instead of stacking.
+      const exists = useProjectStore
+        .getState()
+        .edges.some(
+          (e) =>
+            e.sourceNodeId === connection.source &&
+            e.targetNodeId === connection.target,
+        )
+      if (exists) return
       const edge = createArchitectureEdge({
         projectId: project.id,
         sourceNodeId: connection.source,
@@ -210,9 +223,10 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   const isValidConnection = useCallback((connection: Connection | Edge) => {
     const source = 'source' in connection ? connection.source : null
     const target = 'target' in connection ? connection.target : null
-    if (!source || !target) return false
-    // Allow many edges between the same pair (different sides / parallel links).
-    return source !== target
+    if (!source || !target || source === target) return false
+    return !useProjectStore
+      .getState()
+      .edges.some((e) => e.sourceNodeId === source && e.targetNodeId === target)
   }, [])
 
   const onNodeDragStop = useCallback(
@@ -506,6 +520,16 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         onMove={(_, viewport) => setZoom(viewport.zoom)}
         selectionMode={SelectionMode.Partial}
         connectionMode={ConnectionMode.Loose}
+        connectionLineType={ConnectionLineType.SmoothStep}
+        connectionLineStyle={{
+          stroke: 'var(--color-accent)',
+          strokeWidth: 2,
+          strokeDasharray: '6 4',
+        }}
+        defaultEdgeOptions={{
+          type: 'labeled',
+          interactionWidth: 20,
+        }}
         nodesDraggable
         nodesConnectable
         elementsSelectable

@@ -42,6 +42,75 @@ function humanError(message: string): Error {
   return new Error(message)
 }
 
+function friendlySyncMessage(raw: string): string {
+  const msg = raw.toLowerCase()
+  if (msg.includes('row-level security') || msg.includes('violates row-level')) {
+    return 'Sync blocked — rejoin the project (share code) on this PC.'
+  }
+  if (
+    msg.includes('foreign key') ||
+    msg.includes('violates foreign key') ||
+    msg.includes('source_node_id') ||
+    msg.includes('target_node_id')
+  ) {
+    return 'Connection sync waited for missing nodes — retrying.'
+  }
+  if (msg.includes('not authenticated') || msg.includes('jwt')) {
+    return 'Session expired — reopen the project to sync.'
+  }
+  if (msg.includes('project is currently full')) {
+    return 'Project is full (3 people max).'
+  }
+  return raw || 'Could not sync'
+}
+
+function outboxRank(item: OutboxItem): number {
+  // Nodes before edges; deletes after writes so FKs stay valid.
+  if (item.table === 'nodes' && item.op !== 'delete') return 0
+  if (item.table === 'edges' && item.op !== 'delete') return 1
+  if (item.table === 'edges' && item.op === 'delete') return 2
+  return 3
+}
+
+/** Last write wins per entity; then order for FK-safe flush. */
+function prepareOutbox(items: OutboxItem[]): {
+  apply: OutboxItem[]
+  discardIds: string[]
+} {
+  const byKey = new Map<string, OutboxItem>()
+  const chronological = [...items].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  )
+  for (const item of chronological) {
+    const id = String(item.payload.id ?? '')
+    if (!id) continue
+    byKey.set(`${item.table}:${id}`, item)
+  }
+  const apply = [...byKey.values()].sort((a, b) => {
+    const rank = outboxRank(a) - outboxRank(b)
+    if (rank !== 0) return rank
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  })
+  const keep = new Set(apply.map((i) => i.id))
+  const discardIds = items.filter((i) => !keep.has(i.id)).map((i) => i.id)
+  return { apply, discardIds }
+}
+
+function isFkError(message: string): boolean {
+  const msg = message.toLowerCase()
+  return (
+    msg.includes('foreign key') ||
+    msg.includes('violates foreign key') ||
+    msg.includes('source_node_id') ||
+    msg.includes('target_node_id')
+  )
+}
+
+function isRlsError(message: string): boolean {
+  const msg = message.toLowerCase()
+  return msg.includes('row-level security') || msg.includes('violates row-level')
+}
+
 function nodeToPayload(node: ArchitectureNode): Record<string, unknown> {
   return {
     id: node.id,
@@ -525,22 +594,80 @@ export class SyncEngine {
       }
 
       const items = await listOutbox(this.projectId)
-      for (const item of items) {
-        await this.applyOutboxItem(item)
-        await removeOutbox(item.id)
+      const { apply, discardIds } = prepareOutbox(items)
+      for (const id of discardIds) await removeOutbox(id)
+
+      const failures: string[] = []
+      for (const item of apply) {
+        try {
+          await this.applyOutboxItem(item)
+          await removeOutbox(item.id)
+        } catch (e) {
+          const raw = e instanceof Error ? e.message : 'Could not sync'
+          // Drop poison edge writes that can never succeed (missing endpoints).
+          if (item.table === 'edges' && item.op !== 'delete' && isFkError(raw)) {
+            const dropped = await this.repairOrDropEdge(item)
+            if (dropped) {
+              await removeOutbox(item.id)
+              continue
+            }
+          }
+          failures.push(friendlySyncMessage(raw))
+          // Keep failed item for retry; continue so one bad edge doesn't block nodes.
+        }
       }
-      useUiStore.getState().setSyncError(null)
-      useUiStore.getState().setSaveStatus(this.realtimeReady ? 'live' : 'saved')
+
+      if (failures.length) {
+        useUiStore.getState().setSyncError(failures[0] ?? 'Could not sync')
+        useUiStore.getState().setSaveStatus('error')
+      } else {
+        useUiStore.getState().setSyncError(null)
+        useUiStore.getState().setSaveStatus(this.realtimeReady ? 'live' : 'saved')
+      }
       await this.persistLocalSnapshot()
-      // Pull after push so we absorb peer edits immediately
       void this.pullRemoteState()
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not sync'
-      useUiStore.getState().setSyncError(message)
+      const raw = e instanceof Error ? e.message : 'Could not sync'
+      useUiStore.getState().setSyncError(friendlySyncMessage(raw))
       useUiStore.getState().setSaveStatus(navigator.onLine ? 'error' : 'offline')
     } finally {
       this.flushing = false
     }
+  }
+
+  /** Push endpoint nodes, retry edge once; drop orphan if endpoints gone locally. */
+  private async repairOrDropEdge(item: OutboxItem): Promise<boolean> {
+    const sourceId = String(item.payload.source_node_id ?? '')
+    const targetId = String(item.payload.target_node_id ?? '')
+    const edgeId = String(item.payload.id ?? '')
+    const state = useProjectStore.getState()
+    const source = state.nodes.find((n) => n.id === sourceId)
+    const target = state.nodes.find((n) => n.id === targetId)
+
+    if (!source || !target) {
+      if (edgeId) state.applyRemoteEdgeDelete(edgeId)
+      return true
+    }
+
+    const srcPayload = nodeToPayload({ ...source, updatedBy: this.userId ?? source.updatedBy })
+    const tgtPayload = nodeToPayload({ ...target, updatedBy: this.userId ?? target.updatedBy })
+    const { error: srcErr } = await supabase
+      .from('nodes')
+      .upsert(srcPayload as never, { onConflict: 'id' })
+    if (srcErr) return false
+    const { error: tgtErr } = await supabase
+      .from('nodes')
+      .upsert(tgtPayload as never, { onConflict: 'id' })
+    if (tgtErr) return false
+
+    const edgePayload = {
+      ...item.payload,
+      updated_by: this.userId ?? item.payload.updated_by,
+    }
+    const { error } = await supabase.from('edges').upsert(edgePayload as never, {
+      onConflict: 'id',
+    })
+    return !error
   }
 
   private async applyOutboxItem(item: OutboxItem): Promise<void> {
@@ -552,8 +679,20 @@ export class SyncEngine {
         if (error) throw humanError(error.message || 'Could not sync node removal.')
         return
       }
-      const { error } = await supabase.from('nodes').upsert(payload as never, { onConflict: 'id' })
-      if (error) throw humanError(error.message || 'Could not sync node changes.')
+      const body = {
+        ...payload,
+        updated_by: this.userId ?? payload.updated_by,
+      }
+      const { error } = await supabase.from('nodes').upsert(body as never, { onConflict: 'id' })
+      if (error) {
+        if (isRlsError(error.message)) {
+          await supabase.auth.refreshSession()
+          const retry = await supabase.from('nodes').upsert(body as never, { onConflict: 'id' })
+          if (retry.error) throw humanError(retry.error.message || 'Could not sync node changes.')
+          return
+        }
+        throw humanError(error.message || 'Could not sync node changes.')
+      }
       return
     }
 
@@ -561,11 +700,43 @@ export class SyncEngine {
       if (item.op === 'delete') {
         const id = payload.id as string
         const { error } = await supabase.from('edges').delete().eq('id', id)
-        if (error) throw humanError(error.message || 'Could not sync connection removal.')
+        // Already gone remotely (cascade) is fine.
+        if (error && !isFkError(error.message)) {
+          throw humanError(error.message || 'Could not sync connection removal.')
+        }
         return
       }
-      const { error } = await supabase.from('edges').upsert(payload as never, { onConflict: 'id' })
-      if (error) throw humanError(error.message || 'Could not sync connection changes.')
+
+      // Ensure endpoints exist before the edge write (avoids FK "violates" loops).
+      const sourceId = String(payload.source_node_id ?? '')
+      const targetId = String(payload.target_node_id ?? '')
+      const state = useProjectStore.getState()
+      for (const nodeId of [sourceId, targetId]) {
+        const node = state.nodes.find((n) => n.id === nodeId)
+        if (!node) continue
+        const { error: nodeErr } = await supabase
+          .from('nodes')
+          .upsert(
+            nodeToPayload({ ...node, updatedBy: this.userId ?? node.updatedBy }) as never,
+            { onConflict: 'id' },
+          )
+        if (nodeErr) throw humanError(nodeErr.message || 'Could not sync node for connection.')
+      }
+
+      const body = {
+        ...payload,
+        updated_by: this.userId ?? payload.updated_by,
+      }
+      const { error } = await supabase.from('edges').upsert(body as never, { onConflict: 'id' })
+      if (error) {
+        if (isRlsError(error.message)) {
+          await supabase.auth.refreshSession()
+          const retry = await supabase.from('edges').upsert(body as never, { onConflict: 'id' })
+          if (retry.error) throw humanError(retry.error.message || 'Could not sync connection.')
+          return
+        }
+        throw humanError(error.message || 'Could not sync connection changes.')
+      }
     }
   }
 }

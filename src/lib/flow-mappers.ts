@@ -1,4 +1,9 @@
-import type { Edge, Node } from '@xyflow/react'
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
+import {
+  parallelEdgeSlot,
+  parallelPathOffset,
+  pickHandlePair,
+} from '@/lib/edge-routing'
 import type { ArchitectureEdge, ArchitectureNode } from '@/types'
 
 export type ArchitectureFlowData = {
@@ -7,6 +12,7 @@ export type ArchitectureFlowData = {
 
 export type ArchitectureEdgeData = {
   architectureEdge: ArchitectureEdge
+  pathOffset?: number
 }
 
 export function toFlowNode(node: ArchitectureNode): Node<ArchitectureFlowData> {
@@ -26,11 +32,31 @@ export function toFlowNode(node: ArchitectureNode): Node<ArchitectureFlowData> {
   }
 }
 
-export function toFlowEdge(edge: ArchitectureEdge): Edge<ArchitectureEdgeData> {
-  const sourceHandle =
-    typeof edge.style.sourceHandle === 'string' ? edge.style.sourceHandle : undefined
-  const targetHandle =
-    typeof edge.style.targetHandle === 'string' ? edge.style.targetHandle : undefined
+export function toFlowEdge(
+  edge: ArchitectureEdge,
+  nodes: ArchitectureNode[],
+  allEdges: ArchitectureEdge[],
+): Edge<ArchitectureEdgeData> {
+  const source = nodes.find((n) => n.id === edge.sourceNodeId)
+  const target = nodes.find((n) => n.id === edge.targetNodeId)
+  const auto =
+    source && target
+      ? pickHandlePair(source, target)
+      : { sourceHandle: 'right' as const, targetHandle: 'left' as const }
+
+  // Prefer geometry-based ports so links stay clean when nodes move.
+  // Manual ports only win if explicitly locked after a drag-from-handle.
+  const locked = edge.style.lockHandles === true
+  const sourceHandle = locked && typeof edge.style.sourceHandle === 'string'
+    ? edge.style.sourceHandle
+    : auto.sourceHandle
+  const targetHandle = locked && typeof edge.style.targetHandle === 'string'
+    ? edge.style.targetHandle
+    : auto.targetHandle
+
+  const { index, count } = parallelEdgeSlot(edge, allEdges)
+  const pathOffset = parallelPathOffset(index, count)
+
   return {
     id: edge.id,
     source: edge.sourceNodeId,
@@ -38,7 +64,13 @@ export function toFlowEdge(edge: ArchitectureEdge): Edge<ArchitectureEdgeData> {
     sourceHandle,
     targetHandle,
     type: 'labeled',
-    label: edge.label,
-    data: { architectureEdge: edge },
+    label: edge.label || undefined,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 18,
+      height: 18,
+      color: '#94a3b8',
+    },
+    data: { architectureEdge: edge, pathOffset },
   }
 }
