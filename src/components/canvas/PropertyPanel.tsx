@@ -12,7 +12,7 @@ import { syncEngine } from '@/features/collaboration/sync'
 import { ADDABLE_NODE_TYPES, NODE_CATALOG, defaultNodeSize } from '@/lib/node-types'
 import { useProjectStore } from '@/stores/project-store'
 import { useUiStore } from '@/stores/ui-store'
-import type { NodeType } from '@/types'
+import type { ArchitectureNode, NodeType } from '@/types'
 
 export function PropertyPanel() {
   const editingNodeId = useUiStore((s) => s.editingNodeId)
@@ -82,12 +82,14 @@ export function PropertyPanel() {
   const latestNode = () =>
     (node && useProjectStore.getState().nodes.find((n) => n.id === node.id)) || node
 
-  const persistNode = (patch: {
-    name?: string
-    technology?: string
-    description?: string
-    color?: string
-  }) => {
+  const persistNode = (
+    patch: Partial<
+      Pick<
+        ArchitectureNode,
+        'name' | 'technology' | 'description' | 'color' | 'type' | 'width' | 'height'
+      >
+    >,
+  ) => {
     if (!node) return
     const current = latestNode()
     if (!current) return
@@ -96,7 +98,7 @@ export function PropertyPanel() {
       ...patch,
       updatedAt: new Date().toISOString(),
     }
-    updateNode(node.id, patch)
+    updateNode(node.id, patch, patch.type ? 'Change type' : 'Edit node')
     void syncEngine.upsertNode(updated)
   }
 
