@@ -1,5 +1,6 @@
 import { NODE_CATALOG, defaultNodeSize } from '@/lib/node-types'
 import type { ArchitectureEdge, ArchitectureNode, NodeType } from '@/types'
+import { ensureSpecLayout } from './layout'
 import type {
   ArchitectureSpec,
   ArchitectureSpecEdge,
@@ -7,12 +8,6 @@ import type {
 } from './types'
 
 const NODE_TYPES = new Set<string>(Object.keys(NODE_CATALOG))
-
-const GRID_COLS = 4
-const GRID_GAP_X = 280
-const GRID_GAP_Y = 160
-const GRID_ORIGIN_X = 80
-const GRID_ORIGIN_Y = 80
 
 function slugify(value: string): string {
   const base = value
@@ -185,23 +180,22 @@ export function parseArchitectureSpec(raw: string): ArchitectureSpec {
   }
 }
 
-/** Convert Spec → canvas nodes/edges with fresh UUIDs. Auto-layout missing coordinates. */
+/** Convert Spec → canvas nodes/edges with fresh UUIDs. Auto-layout messy/missing coords. */
 export function specToCanvas(input: {
   spec: ArchitectureSpec
   projectId: string
   userId: string
 }): { nodes: ArchitectureNode[]; edges: ArchitectureEdge[] } {
+  const laidOut = ensureSpecLayout(input.spec)
   const now = new Date().toISOString()
   const idMap = new Map<string, string>()
   const nodes: ArchitectureNode[] = []
 
-  input.spec.nodes.forEach((draft, index) => {
+  for (const draft of laidOut.nodes) {
     const uuid = crypto.randomUUID()
     idMap.set(draft.id, uuid)
     const size = defaultNodeSize(draft.type)
     const catalog = NODE_CATALOG[draft.type]
-    const col = index % GRID_COLS
-    const row = Math.floor(index / GRID_COLS)
     nodes.push({
       id: uuid,
       projectId: input.projectId,
@@ -210,8 +204,8 @@ export function specToCanvas(input: {
       description: draft.description ?? '',
       technology: draft.technology ?? catalog.defaultTechnology,
       color: draft.color ?? catalog.defaultColor,
-      positionX: draft.x ?? GRID_ORIGIN_X + col * GRID_GAP_X,
-      positionY: draft.y ?? GRID_ORIGIN_Y + row * GRID_GAP_Y,
+      positionX: draft.x ?? 80,
+      positionY: draft.y ?? 80,
       width: draft.width ?? size.width,
       height: draft.height ?? size.height,
       zIndex: draft.type === 'group' ? 0 : 1,
@@ -221,9 +215,9 @@ export function specToCanvas(input: {
       createdAt: now,
       updatedAt: now,
     })
-  })
+  }
 
-  const edges: ArchitectureEdge[] = input.spec.edges.map((draft) => ({
+  const edges: ArchitectureEdge[] = laidOut.edges.map((draft) => ({
     id: crypto.randomUUID(),
     projectId: input.projectId,
     sourceNodeId: idMap.get(draft.from)!,

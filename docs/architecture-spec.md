@@ -146,10 +146,14 @@ Rules:
 - Unique string ids (frontend, auth-service) — not UUIDs
 - edges.from / edges.to must match node ids
 - Prefer 6–20 nodes unless the brief is large
-- Space nodes ~240–280 apart on x/y
+- **Every node needs distinct x/y** (never pile at 0,0):
+  - Left→right lanes ~300px apart: users/external (x≈80) → apps (x≈380) → APIs/services (x≈680) → databases/queues (x≈980)
+  - Stack siblings ~140–180px apart on Y
 - Prefer calm defaults; omit color unless meaningful
 - Include users, apps, APIs, services, databases, queues, and external systems when relevant
 ```
+
+The app also auto-layouts on import if coordinates are missing, overlapping, or piled up.
 
 **2. Paste your product docs / PRD / brief.**
 

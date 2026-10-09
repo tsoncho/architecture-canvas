@@ -9,44 +9,57 @@ const TYPE_LIST = Object.values(NODE_CATALOG)
 const EXAMPLE: ArchitectureSpec = {
   version: 1,
   name: 'Simple web app',
-  description: 'Example only',
+  description: 'Left-to-right layered layout',
   nodes: [
-    {
-      id: 'user',
-      type: 'user',
-      name: 'User',
-      x: 80,
-      y: 200,
-    },
+    { id: 'user', type: 'user', name: 'User', x: 80, y: 220 },
     {
       id: 'frontend',
       type: 'application',
       name: 'Web App',
       technology: 'React',
-      x: 320,
-      y: 200,
+      x: 380,
+      y: 220,
     },
     {
       id: 'api',
       type: 'api',
       name: 'API',
       technology: 'Node.js',
-      x: 560,
-      y: 200,
+      x: 680,
+      y: 140,
+    },
+    {
+      id: 'worker',
+      type: 'service',
+      name: 'Worker',
+      technology: 'Node.js',
+      x: 680,
+      y: 300,
     },
     {
       id: 'db',
       type: 'database',
       name: 'PostgreSQL',
       technology: 'Postgres',
-      x: 800,
-      y: 200,
+      x: 980,
+      y: 140,
+    },
+    {
+      id: 'queue',
+      type: 'queue',
+      name: 'Jobs',
+      technology: 'Redis',
+      x: 980,
+      y: 300,
     },
   ],
   edges: [
     { from: 'user', to: 'frontend', label: 'uses' },
     { from: 'frontend', to: 'api', label: 'HTTPS' },
     { from: 'api', to: 'db', label: 'SQL' },
+    { from: 'api', to: 'queue', label: 'enqueue' },
+    { from: 'queue', to: 'worker', label: 'consume' },
+    { from: 'worker', to: 'db', label: 'SQL' },
   ],
 }
 
@@ -101,17 +114,23 @@ ${existing}
 ${TYPE_LIST}
 4. Keep it readable: prefer 6–20 nodes unless the brief is large.
 5. Use stable string ids (frontend, auth-service, postgres). Edges must reference those ids.
-6. Lay nodes out left-to-right / top-to-bottom with x/y spacing (~240–280 apart).
+6. **Layout is mandatory — every node MUST have distinct x/y** so the diagram is not a pile:
+   - Flow **left → right** in lanes spaced **300px** on X:
+     - lane 0 (x≈80): users, external systems
+     - lane 1 (x≈380): applications / clients
+     - lane 2 (x≈680): apis, services, servers
+     - lane 3 (x≈980): databases, queues
+   - Space siblings **~140–180px** apart on Y (never stack on the same point).
+   - Never put two nodes within ~80px of each other. Never leave all nodes at 0,0.
+   - Put upstream callers left of dependencies; data stores farthest right.
 7. Prefer calm defaults; omit color unless meaningful.
 8. Include users, apps, APIs, services, databases, queues, and external systems when relevant.
+9. Edge labels short (HTTPS, SQL, events). Only connect real dependencies.
 
-## Tiny example (shape only)
+## Tiny example (shape + layout)
 ${stringifyArchitectureSpec(EXAMPLE).trim()}
 `
 }
 
-export const SPEC_FORMAT_SUMMARY = `Architecture Spec is a small JSON format for Architecture Canvas.
-
-Export your diagram → give it (or docs) to an AI → paste the JSON back via Import Spec.
-
-Allowed types: ${Object.keys(NODE_CATALOG).join(', ')}.`
+export const SPEC_FORMAT_SUMMARY =
+  'Architecture Spec is JSON for Architecture Canvas. Ask AI → paste Import. Prefer left-to-right x/y layout (users → apps → APIs → data).'
