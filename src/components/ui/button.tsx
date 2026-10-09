@@ -13,8 +13,9 @@ const buttonVariants = cva(
         secondary:
           'bg-[color-mix(in_srgb,var(--color-border)_60%,transparent)] text-[var(--color-ink)] hover:bg-[var(--color-border)]',
         outline:
-          'border border-[var(--color-border)] bg-transparent hover:bg-[color-mix(in_srgb,var(--color-border)_40%,transparent)]',
-        ghost: 'hover:bg-[color-mix(in_srgb,var(--color-border)_40%,transparent)]',
+          'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:bg-[color-mix(in_srgb,var(--color-border)_40%,transparent)]',
+        ghost:
+          'text-[var(--color-ink)] hover:bg-[color-mix(in_srgb,var(--color-border)_40%,transparent)]',
         destructive: 'bg-red-600 text-white hover:bg-red-700',
       },
       size: {

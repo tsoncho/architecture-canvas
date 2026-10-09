@@ -1,6 +1,6 @@
 [package]
 name = "architecture-canvas"
-version = "0.1.5"
+version = "0.1.6"
 description = "Lightweight collaborative architecture diagramming for Windows"
 authors = ["Architecture Canvas"]
 license = "MIT"

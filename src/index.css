@@ -1,23 +1,22 @@
 @import "tailwindcss";
 
+/* Only honor dark: when .dark is set — never via Windows prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Cascadia Code", ui-monospace, monospace;
   --color-canvas: #f3f4f6;
-  --color-canvas-dark: #0c0e12;
   --color-surface: #ffffff;
-  --color-surface-dark: #151820;
   --color-border: #e5e7eb;
-  --color-border-dark: #2a2f3a;
   --color-ink: #0f172a;
-  --color-ink-dark: #e8eaef;
   --color-muted: #64748b;
   --color-accent: #1d4ed8;
   --radius-sm: 8px;
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: light only;
   font-family: var(--font-sans);
   font-feature-settings: "ss01" on, "cv11" on;
   background: var(--color-canvas);
@@ -26,9 +25,16 @@
   text-rendering: optimizeLegibility;
 }
 
+html,
+body {
+  color-scheme: light only;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
-button { font: inherit; }
+button { font: inherit; color: inherit; }
 
 .react-flow__node.selected { outline: none; }
 .react-flow__selection {

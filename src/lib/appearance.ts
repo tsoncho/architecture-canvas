@@ -1,12 +1,14 @@
 import type { AppSettings } from '@/types'
 
-/** Single fixed light theme — no dark/system switch. */
+/** Single fixed light theme — ignore OS dark mode entirely. */
 export function applyAppearanceClass(settings: AppSettings): void {
-  document.documentElement.classList.remove('dark')
-  document.documentElement.style.colorScheme = 'light'
+  const root = document.documentElement
+  root.classList.remove('dark')
+  root.style.colorScheme = 'light'
+  document.body?.style.setProperty('color-scheme', 'light')
   if (settings.reducedMotion) {
-    document.documentElement.classList.add('reduce-motion')
+    root.classList.add('reduce-motion')
   } else {
-    document.documentElement.classList.remove('reduce-motion')
+    root.classList.remove('reduce-motion')
   }
 }
