@@ -111,8 +111,66 @@ Open a project → **Spec** in the top bar:
 5. Nudge layout / rename nodes visually
 6. **Export** again when you want another AI pass (“simplify this”, “add observability”, …)
 
-## Example prompt fragment
+## Exact AI paste (copy this)
 
-> Based on the attached PRD, design a pragmatic architecture for MVP. Output Architecture Spec JSON only (version 1) using types application, service, database, api, queue, external, user.
+Use this in ChatGPT / Claude / Cursor **before** (or around) your product docs.
 
-Full prompt text is generated inside the app so it stays in sync with the format.
+**1. Paste this system/format block:**
+
+```text
+You are designing a software architecture diagram for Architecture Canvas.
+
+Reply with ONLY valid JSON (no markdown, no commentary). Use this schema:
+
+{
+  "version": 1,
+  "name": "string",
+  "description": "optional",
+  "nodes": [
+    {
+      "id": "stable-kebab-id",
+      "type": "application|service|database|api|server|queue|external|user|group|text",
+      "name": "Human label",
+      "technology": "optional",
+      "description": "optional",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "edges": [
+    { "from": "node-id", "to": "node-id", "label": "optional" }
+  ]
+}
+
+Rules:
+- Unique string ids (frontend, auth-service) — not UUIDs
+- edges.from / edges.to must match node ids
+- Prefer 6–20 nodes unless the brief is large
+- Space nodes ~240–280 apart on x/y
+- Prefer calm defaults; omit color unless meaningful
+- Include users, apps, APIs, services, databases, queues, and external systems when relevant
+```
+
+**2. Paste your product docs / PRD / brief.**
+
+**3. Paste this closing ask:**
+
+```text
+Design a pragmatic MVP architecture from the docs above. Output Architecture Spec JSON only.
+```
+
+**4.** Copy the JSON reply → Architecture Canvas → **Spec** → **Import**.
+
+---
+
+### Optional: improve an existing diagram
+
+Export Spec from the app, then paste that JSON after your docs and say:
+
+```text
+Improve or redesign this Architecture Spec based on the docs. Output Architecture Spec JSON only (version 1).
+```
+
+---
+
+In the app, **Spec → Ask AI** builds the same kind of prompt automatically (brief + optional current Spec).
