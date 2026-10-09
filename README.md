@@ -23,9 +23,19 @@ Most architecture tools are either whiteboards (too freeform) or enterprise suit
 
 ## Download (Windows)
 
+### One-liner (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/tsoncho/architecture-canvas/master/scripts/install.ps1 | iex
+```
+
+That downloads the latest setup from GitHub Releases and launches the installer.
+
+### Manual
+
 Grab the latest installer from **[Releases](https://github.com/tsoncho/architecture-canvas/releases/latest)**:
 
-`Architecture Canvas_*_x64-setup.exe`
+`Architecture.Canvas_*_x64-setup.exe`
 
 Installed builds **auto-update** from GitHub Releases (signed updater).
 
