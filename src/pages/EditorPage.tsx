@@ -170,6 +170,7 @@ export function EditorPage() {
       <ShareDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
+        projectId={project.id}
         joinCode={project.joinCode}
         members={members}
         currentUserId={userId}

@@ -90,6 +90,7 @@ export const ADDABLE_NODE_TYPES: NodeType[] = [
   'queue',
   'external',
   'user',
+  'group',
   'text',
 ]
 

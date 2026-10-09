@@ -85,6 +85,12 @@ export function SpecDialog({ open, onOpenChange, userId }: SpecDialogProps) {
 
   const onImport = async () => {
     if (!project) return
+    if (nodes.length > 0 || edges.length > 0) {
+      const ok = window.confirm(
+        `Replace the current diagram (${nodes.length} components, ${edges.length} connections) with this Spec?\n\nYou can undo with Ctrl+Z after import.`,
+      )
+      if (!ok) return
+    }
     setBusy(true)
     setError(null)
     setStatus(null)
@@ -101,7 +107,9 @@ export function SpecDialog({ open, onOpenChange, userId }: SpecDialogProps) {
       window.setTimeout(() => dispatchFitView(), 50)
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not import that Spec.')
+      const message = err instanceof Error ? err.message : 'Could not import that Spec.'
+      setError(message)
+      toast(message, 'error')
     } finally {
       setBusy(false)
     }

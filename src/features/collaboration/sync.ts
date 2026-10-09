@@ -8,6 +8,7 @@ import {
   saveSnapshot,
 } from '@/lib/storage/local'
 import { useProjectStore } from '@/stores/project-store'
+import { toast } from '@/stores/toast-store'
 import { useUiStore } from '@/stores/ui-store'
 import type {
   ArchitectureEdge,
@@ -159,6 +160,12 @@ export class SyncEngine {
   private pulling = false
   private pullTimer: ReturnType<typeof setInterval> | null = null
   private realtimeReady = false
+  /** Local nodes currently being dragged — pull must not snap their positions. */
+  private draggingIds = new Set<string>()
+
+  setDraggingIds(ids: string[]): void {
+    this.draggingIds = new Set(ids)
+  }
 
   async start(projectId: string, userId: string, displayName: string): Promise<void> {
     await this.stop()
@@ -329,9 +336,10 @@ export class SyncEngine {
       ])
 
       if (nodesRes.error || edgesRes.error) {
-        useUiStore.getState().setSyncError(
-          nodesRes.error?.message || edgesRes.error?.message || 'Pull failed',
-        )
+        const message =
+          nodesRes.error?.message || edgesRes.error?.message || 'Pull failed'
+        useUiStore.getState().setSyncError(message)
+        toast(friendlySyncMessage(message), 'error')
         return
       }
 
@@ -357,13 +365,18 @@ export class SyncEngine {
       for (const remote of remoteNodes) {
         if (pendingDeletes.has(remote.id)) continue
         const local = nodeMap.get(remote.id)
+        if (this.draggingIds.has(remote.id)) continue
+        // Pending local writes win until flushed.
+        if (pendingNodeIds.has(remote.id) && local) continue
         if (!local || newer(remote.updatedAt, local.updatedAt)) {
+          if (local && newer(local.updatedAt, remote.updatedAt)) continue
           nodeMap.set(remote.id, remote)
         }
       }
       for (const id of [...nodeMap.keys()]) {
         if (remoteNodes.some((n) => n.id === id)) continue
         if (pendingNodeIds.has(id)) continue
+        if (this.draggingIds.has(id)) continue
         nodeMap.delete(id)
       }
 
@@ -371,7 +384,9 @@ export class SyncEngine {
       for (const remote of remoteEdges) {
         if (pendingDeletes.has(remote.id)) continue
         const local = edgeMap.get(remote.id)
+        if (pendingEdgeIds.has(remote.id) && local) continue
         if (!local || newer(remote.updatedAt, local.updatedAt)) {
+          if (local && newer(local.updatedAt, remote.updatedAt)) continue
           edgeMap.set(remote.id, remote)
         }
       }
@@ -395,7 +410,9 @@ export class SyncEngine {
         useUiStore.getState().setSaveStatus(this.realtimeReady ? 'live' : 'saved')
       }
     } catch (e) {
-      useUiStore.getState().setSyncError(e instanceof Error ? e.message : 'Pull failed')
+      const message = e instanceof Error ? e.message : 'Pull failed'
+      useUiStore.getState().setSyncError(message)
+      toast(friendlySyncMessage(message), 'error')
     } finally {
       this.pulling = false
     }
@@ -461,22 +478,44 @@ export class SyncEngine {
     }
   }
 
+  /**
+   * Sync only the delta from an undo/redo — not the whole graph.
+   * Pass the graph snapshot *before* undo/redo ran.
+   */
   async syncUndoSnapshot(
-    beforeNodeIds: string[],
-    beforeEdgeIds: string[],
+    beforeNodes: ArchitectureNode[],
+    beforeEdges: ArchitectureEdge[],
   ): Promise<void> {
     if (!this.projectId) return
     const { nodes, edges } = useProjectStore.getState()
-    const nodeIds = new Set(nodes.map((n) => n.id))
-    const edgeIds = new Set(edges.map((e) => e.id))
-    for (const id of beforeNodeIds) {
-      if (!nodeIds.has(id)) await this.deleteNode(id)
+    const afterNodeIds = new Set(nodes.map((n) => n.id))
+    const afterEdgeIds = new Set(edges.map((e) => e.id))
+    const beforeNodeMap = new Map(beforeNodes.map((n) => [n.id, n]))
+    const beforeEdgeMap = new Map(beforeEdges.map((e) => [e.id, e]))
+
+    for (const n of beforeNodes) {
+      if (!afterNodeIds.has(n.id)) await this.deleteNode(n.id)
     }
-    for (const id of beforeEdgeIds) {
-      if (!edgeIds.has(id)) await this.deleteEdge(id)
+    for (const e of beforeEdges) {
+      if (!afterEdgeIds.has(e.id)) await this.deleteEdge(e.id)
     }
-    for (const node of nodes) await this.upsertNode(node)
-    for (const edge of edges) await this.upsertEdge(edge)
+
+    for (const node of nodes) {
+      const prev = beforeNodeMap.get(node.id)
+      if (!prev || prev.updatedAt !== node.updatedAt || JSON.stringify(prev) !== JSON.stringify(node)) {
+        await this.upsertNode(node)
+      }
+    }
+    for (const edge of edges) {
+      const prev = beforeEdgeMap.get(edge.id)
+      if (!prev || prev.updatedAt !== edge.updatedAt || JSON.stringify(prev) !== JSON.stringify(edge)) {
+        await this.upsertEdge(edge)
+      }
+    }
+  }
+
+  retryFlush(): void {
+    void this.flushOutbox()
   }
 
   async persistLocalSnapshot(): Promise<void> {
@@ -618,8 +657,10 @@ export class SyncEngine {
       }
 
       if (failures.length) {
-        useUiStore.getState().setSyncError(failures[0] ?? 'Could not sync')
+        const message = failures[0] ?? 'Could not sync'
+        useUiStore.getState().setSyncError(message)
         useUiStore.getState().setSaveStatus('error')
+        toast(`${message} — click Live status to retry`, 'error')
       } else {
         useUiStore.getState().setSyncError(null)
         useUiStore.getState().setSaveStatus(this.realtimeReady ? 'live' : 'saved')
@@ -628,8 +669,10 @@ export class SyncEngine {
       void this.pullRemoteState()
     } catch (e) {
       const raw = e instanceof Error ? e.message : 'Could not sync'
-      useUiStore.getState().setSyncError(friendlySyncMessage(raw))
+      const message = friendlySyncMessage(raw)
+      useUiStore.getState().setSyncError(message)
       useUiStore.getState().setSaveStatus(navigator.onLine ? 'error' : 'offline')
+      toast(`${message} — click status to retry`, 'error')
     } finally {
       this.flushing = false
     }

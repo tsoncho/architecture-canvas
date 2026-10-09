@@ -12,6 +12,7 @@ import {
   type Edge,
   type Node,
   type NodeChange,
+  type OnReconnect,
   type OnSelectionChangeParams,
   type XYPosition,
 } from '@xyflow/react'
@@ -32,6 +33,7 @@ import { toFlowEdge, toFlowNode, type ArchitectureFlowData } from '@/lib/flow-ma
 import { useProjectStore } from '@/stores/project-store'
 import { useUiStore } from '@/stores/ui-store'
 import { useIdentityStore } from '@/stores/identity-store'
+import { toast } from '@/stores/toast-store'
 import type { ArchitectureEdge, ArchitectureNode, NodeType } from '@/types'
 import { NODE_CATALOG } from '@/lib/node-types'
 
@@ -65,9 +67,12 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   const edges = useProjectStore((s) => s.edges)
   const addNode = useProjectStore((s) => s.addNode)
   const addEdge = useProjectStore((s) => s.addEdge)
+  const updateEdge = useProjectStore((s) => s.updateEdge)
   const moveNodes = useProjectStore((s) => s.moveNodes)
+  const resizeNode = useProjectStore((s) => s.resizeNode)
   const deleteNodes = useProjectStore((s) => s.deleteNodes)
   const deleteEdges = useProjectStore((s) => s.deleteEdges)
+  const withHistory = useProjectStore((s) => s.withHistory)
   const undo = useProjectStore((s) => s.undo)
   const redo = useProjectStore((s) => s.redo)
 
@@ -144,36 +149,64 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   }, [selectedIds])
 
   const runSyncedUndo = useCallback(() => {
-    const beforeNodes = useProjectStore.getState().nodes.map((n) => n.id)
-    const beforeEdges = useProjectStore.getState().edges.map((e) => e.id)
-    undo()
+    const before = useProjectStore.getState()
+    const beforeNodes = structuredClone(before.nodes)
+    const beforeEdges = structuredClone(before.edges)
+    const result = undo()
+    if (!result) return
     void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+    toast(`Undid ${result.label}`)
   }, [undo])
 
   const runSyncedRedo = useCallback(() => {
-    const beforeNodes = useProjectStore.getState().nodes.map((n) => n.id)
-    const beforeEdges = useProjectStore.getState().edges.map((e) => e.id)
-    redo()
+    const before = useProjectStore.getState()
+    const beforeNodes = structuredClone(before.nodes)
+    const beforeEdges = structuredClone(before.edges)
+    const result = redo()
+    if (!result) return
     void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+    toast(`Redid ${result.label}`)
   }, [redo])
 
   const onNodesChange = useCallback((changes: NodeChange<Node<ArchitectureFlowData>>[]) => {
     // Never apply remove/add/replace here — that was desyncing the canvas from Spec/store.
     setDragPositions((prev) => {
       let next: Record<string, XYPosition> | null = null
+      const draggingNow = new Set<string>()
       for (const change of changes) {
+        if (change.type === 'dimensions' && change.dimensions && change.resizing === false) {
+          const arch = useProjectStore.getState().nodes.find((n) => n.id === change.id)
+          if (
+            arch &&
+            (arch.width !== change.dimensions.width || arch.height !== change.dimensions.height)
+          ) {
+            resizeNode(change.id, {
+              width: change.dimensions.width,
+              height: change.dimensions.height,
+            })
+            const updated = useProjectStore.getState().nodes.find((n) => n.id === change.id)
+            if (updated) void syncEngine.upsertNode(updated)
+          }
+          continue
+        }
         if (change.type !== 'position' || !change.position) continue
         if (change.dragging) {
           if (!next) next = { ...prev }
           next[change.id] = change.position
+          draggingNow.add(change.id)
         } else if (prev[change.id]) {
           if (!next) next = { ...prev }
           delete next[change.id]
         }
       }
+      const mergedDragging = new Set([
+        ...Object.keys(next ?? prev),
+        ...draggingNow,
+      ])
+      syncEngine.setDraggingIds([...mergedDragging])
       return next ?? prev
     })
-  }, [])
+  }, [resizeNode])
 
   const spawnNode = useCallback(
     (type: NodeType, position: { x: number; y: number }) => {
@@ -257,10 +290,40 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         if (Object.keys(prev).length === 0) return prev
         const next = { ...prev }
         for (const draggedNode of dragged) delete next[draggedNode.id]
+        syncEngine.setDraggingIds(Object.keys(next))
         return next
       })
+      syncEngine.setDraggingIds([])
     },
     [moveNodes],
+  )
+
+  const onReconnect: OnReconnect = useCallback(
+    (oldEdge, newConnection) => {
+      if (!newConnection.source || !newConnection.target) return
+      if (newConnection.source === newConnection.target) return
+      const exists = useProjectStore.getState().edges.some(
+        (e) =>
+          e.id !== oldEdge.id &&
+          e.sourceNodeId === newConnection.source &&
+          e.targetNodeId === newConnection.target,
+      )
+      if (exists) return
+      const patch = {
+        sourceNodeId: newConnection.source,
+        targetNodeId: newConnection.target,
+        style: {
+          sourceHandle: newConnection.sourceHandle ?? undefined,
+          targetHandle: newConnection.targetHandle ?? undefined,
+          lockHandles: true,
+        },
+        updatedAt: new Date().toISOString(),
+      }
+      updateEdge(oldEdge.id, patch, 'Reconnect')
+      const updated = useProjectStore.getState().edges.find((e) => e.id === oldEdge.id)
+      if (updated) void syncEngine.upsertEdge(updated)
+    },
+    [updateEdge],
   )
 
   const onSelectionChange = useCallback(
@@ -321,33 +384,46 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     }
     const offset = 24
     const now = new Date().toISOString()
-    for (const n of clipboard.nodes) {
-      const copy: ArchitectureNode = {
-        ...n,
-        id: idMap.get(n.id)!,
-        positionX: n.positionX + offset,
-        positionY: n.positionY + offset,
-        updatedBy: userId,
-        createdAt: now,
-        updatedAt: now,
+    const createdNodes: ArchitectureNode[] = []
+    const createdEdges: ArchitectureEdge[] = []
+    withHistory('Paste', () => {
+      for (const n of clipboard!.nodes) {
+        const copy: ArchitectureNode = {
+          ...n,
+          id: idMap.get(n.id)!,
+          positionX: n.positionX + offset,
+          positionY: n.positionY + offset,
+          updatedBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        }
+        addNode(copy)
+        createdNodes.push(copy)
       }
-      addNode(copy)
-      void syncEngine.insertNode(copy)
-    }
-    for (const e of clipboard.edges) {
-      const copy: ArchitectureEdge = {
-        ...e,
-        id: crypto.randomUUID(),
-        sourceNodeId: idMap.get(e.sourceNodeId)!,
-        targetNodeId: idMap.get(e.targetNodeId)!,
-        updatedBy: userId,
-        createdAt: now,
-        updatedAt: now,
+      for (const e of clipboard!.edges) {
+        const copy: ArchitectureEdge = {
+          ...e,
+          id: crypto.randomUUID(),
+          sourceNodeId: idMap.get(e.sourceNodeId)!,
+          targetNodeId: idMap.get(e.targetNodeId)!,
+          updatedBy: userId,
+          createdAt: now,
+          updatedAt: now,
+        }
+        addEdge(copy)
+        createdEdges.push(copy)
       }
-      addEdge(copy)
-      void syncEngine.insertEdge(copy)
-    }
-  }, [project, userId, addNode, addEdge])
+    })
+    for (const n of createdNodes) void syncEngine.insertNode(n)
+    for (const e of createdEdges) void syncEngine.insertEdge(e)
+    setSelectedIds(createdNodes.map((n) => n.id))
+    toast(`Pasted ${createdNodes.length} item${createdNodes.length === 1 ? '' : 's'}`)
+  }, [project, userId, addNode, addEdge, withHistory, setSelectedIds])
+
+  const duplicateSelection = useCallback(() => {
+    copySelection()
+    pasteClipboard()
+  }, [copySelection, pasteClipboard])
 
   useEffect(() => {
     const onAdd = (e: Event) => {
@@ -389,26 +465,28 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
           setEditingEdgeId(null)
         }
       }
-      if (event.ctrlKey && event.key === 'z' && !event.shiftKey) {
+      const mod = event.ctrlKey || event.metaKey
+      if (mod && event.key === 'z' && !event.shiftKey) {
         event.preventDefault()
         runSyncedUndo()
       }
-      if (
-        (event.ctrlKey && event.key === 'z' && event.shiftKey) ||
-        (event.ctrlKey && event.key === 'y')
-      ) {
+      if ((mod && event.key === 'z' && event.shiftKey) || (mod && event.key === 'y')) {
         event.preventDefault()
         runSyncedRedo()
       }
-      if (event.ctrlKey && event.key === 'c') {
+      if (mod && event.key === 'c') {
         event.preventDefault()
         copySelection()
       }
-      if (event.ctrlKey && event.key === 'v') {
+      if (mod && event.key === 'v') {
         event.preventDefault()
         pasteClipboard()
       }
-      if (event.ctrlKey && event.key === 'a') {
+      if (mod && event.key === 'd') {
+        event.preventDefault()
+        duplicateSelection()
+      }
+      if (mod && event.key === 'a') {
         event.preventDefault()
         setSelectedIds([...nodes.map((n) => n.id), ...edges.map((e) => e.id)])
       }
@@ -439,6 +517,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     clearSelection,
     copySelection,
     pasteClipboard,
+    duplicateSelection,
     setSelectedIds,
     setEditingNodeId,
     setEditingEdgeId,
@@ -506,6 +585,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onConnect={onConnect}
+        onReconnect={onReconnect}
         isValidConnection={isValidConnection}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
@@ -556,14 +636,22 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
           if (contextMenu.nodeId) setEditingNodeId(contextMenu.nodeId)
           if (contextMenu.edgeId) setEditingEdgeId(contextMenu.edgeId)
         }}
+        onDuplicate={
+          contextMenu.nodeId
+            ? () => {
+                setSelectedIds([contextMenu.nodeId!])
+                window.setTimeout(() => duplicateSelection(), 0)
+              }
+            : undefined
+        }
         onDelete={() => {
           if (contextMenu.nodeId) {
-            deleteNodes([contextMenu.nodeId])
+            deleteNodes([contextMenu.nodeId], 'Delete node')
             void syncEngine.deleteNode(contextMenu.nodeId)
             setEditingNodeId(null)
           }
           if (contextMenu.edgeId) {
-            deleteEdges([contextMenu.edgeId])
+            deleteEdges([contextMenu.edgeId], 'Delete connection')
             void syncEngine.deleteEdge(contextMenu.edgeId)
             setEditingEdgeId(null)
           }

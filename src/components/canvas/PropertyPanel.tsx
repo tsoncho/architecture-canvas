@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { syncEngine } from '@/features/collaboration/sync'
+import { ADDABLE_NODE_TYPES, NODE_CATALOG, defaultNodeSize } from '@/lib/node-types'
 import { useProjectStore } from '@/stores/project-store'
 import { useUiStore } from '@/stores/ui-store'
+import type { NodeType } from '@/types'
 
 export function PropertyPanel() {
   const editingNodeId = useUiStore((s) => s.editingNodeId)
@@ -148,6 +157,37 @@ export function PropertyPanel() {
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
         {node ? (
           <>
+            {node.type !== 'group' && node.type !== 'text' ? (
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select
+                  value={node.type}
+                  onValueChange={(value) => {
+                    const type = value as NodeType
+                    const size = defaultNodeSize(type)
+                    persistNode({
+                      type,
+                      technology:
+                        technology.trim() || NODE_CATALOG[type].defaultTechnology,
+                      width: node.width || size.width,
+                      height: node.height || size.height,
+                      color: color || NODE_CATALOG[type].defaultColor,
+                    })
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ADDABLE_NODE_TYPES.filter((t) => t !== 'text').map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {NODE_CATALOG[type].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="node-name">Name</Label>
               <Input

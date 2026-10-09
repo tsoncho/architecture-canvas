@@ -34,7 +34,7 @@ function AppShell() {
     if (!hydrated) return
     // Desktop builds only — quiet check against GitHub Releases
     const timer = window.setTimeout(() => {
-      void checkForAppUpdate()
+      void checkForAppUpdate({ quiet: true })
     }, 2500)
     return () => window.clearTimeout(timer)
   }, [hydrated])

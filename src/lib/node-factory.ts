@@ -53,6 +53,8 @@ export function createArchitectureEdge(input: {
     style: {
       ...(input.sourceHandle ? { sourceHandle: input.sourceHandle } : {}),
       ...(input.targetHandle ? { targetHandle: input.targetHandle } : {}),
+      // Prefer the ports the user dragged from/to until geometry auto-routing is enough.
+      ...(input.sourceHandle || input.targetHandle ? { lockHandles: true } : {}),
     },
     updatedBy: input.userId,
     createdAt: now,

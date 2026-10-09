@@ -34,8 +34,8 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
             <li>Shift-click — multi-select</li>
             <li>N / double-click — add node</li>
             <li>Delete — remove selection</li>
-            <li>Ctrl+Z / Y — undo / redo</li>
-            <li>Ctrl+C / V — copy / paste</li>
+            <li>Ctrl+Z / Y — undo / redo (labeled history)</li>
+            <li>Ctrl+C / V / D — copy / paste / duplicate</li>
             <li>F — fit view</li>
           </ul>
         </div>

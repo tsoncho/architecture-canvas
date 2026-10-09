@@ -10,28 +10,36 @@ import { ADDABLE_NODE_TYPES, NODE_CATALOG } from '@/lib/node-types'
 import { dispatchFitView, dispatchNodeType } from '@/components/canvas/ArchitectureCanvas'
 import { syncEngine } from '@/features/collaboration/sync'
 import { useProjectStore } from '@/stores/project-store'
+import { toast } from '@/stores/toast-store'
 import { useUiStore } from '@/stores/ui-store'
 import type { NodeType } from '@/types'
 
 function syncedUndo() {
   const state = useProjectStore.getState()
-  const beforeNodes = state.nodes.map((n) => n.id)
-  const beforeEdges = state.edges.map((e) => e.id)
-  state.undo()
+  const beforeNodes = structuredClone(state.nodes)
+  const beforeEdges = structuredClone(state.edges)
+  const result = state.undo()
+  if (!result) return
   void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+  toast(`Undid ${result.label}`)
 }
 
 function syncedRedo() {
   const state = useProjectStore.getState()
-  const beforeNodes = state.nodes.map((n) => n.id)
-  const beforeEdges = state.edges.map((e) => e.id)
-  state.redo()
+  const beforeNodes = structuredClone(state.nodes)
+  const beforeEdges = structuredClone(state.edges)
+  const result = state.redo()
+  if (!result) return
   void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+  toast(`Redid ${result.label}`)
 }
 
 export function EditorToolbar() {
   const canUndo = useProjectStore((s) => s.canUndo)
   const canRedo = useProjectStore((s) => s.canRedo)
+  const undoLabel = useProjectStore((s) => s.undoLabel)
+  const redoLabel = useProjectStore((s) => s.redoLabel)
+  const historyDepth = useProjectStore((s) => s.historyDepth)
   const zoom = useUiStore((s) => s.zoom)
   const addMenuOpen = useUiStore((s) => s.addMenuOpen)
   const setAddMenuOpen = useUiStore((s) => s.setAddMenuOpen)
@@ -43,7 +51,7 @@ export function EditorToolbar() {
   }
 
   return (
-    <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 dark:border-[var(--color-border-dark)] dark:bg-[var(--color-surface-dark)]">
+    <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
       <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button type="button" size="sm" variant="ghost" className="pointer-events-auto h-8">
@@ -69,6 +77,7 @@ export function EditorToolbar() {
         variant="ghost"
         className="pointer-events-auto h-8"
         disabled={!canUndo}
+        title={undoLabel ? `Undo ${undoLabel} (${historyDepth})` : 'Nothing to undo'}
         onClick={() => syncedUndo()}
       >
         <Undo2 className="h-4 w-4" />
@@ -79,6 +88,7 @@ export function EditorToolbar() {
         variant="ghost"
         className="pointer-events-auto h-8"
         disabled={!canRedo}
+        title={redoLabel ? `Redo ${redoLabel}` : 'Nothing to redo'}
         onClick={() => syncedRedo()}
       >
         <Redo2 className="h-4 w-4" />

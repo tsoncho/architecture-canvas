@@ -127,6 +127,16 @@ export async function renameProject(projectId: string, name: string): Promise<Pr
   return mapProject(data)
 }
 
+export async function leaveProject(projectId: string): Promise<void> {
+  const userId = await ensureAuth()
+  const { error } = await supabase
+    .from('project_members')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+  if (error) throw new Error(error.message || 'Could not leave project.')
+}
+
 export async function touchMember(projectId: string): Promise<void> {
   const userId = await ensureAuth()
   const { error } = await supabase

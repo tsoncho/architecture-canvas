@@ -25,6 +25,10 @@ const STEPS = [
     title: 'Share & export',
     body: 'Share a join code with up to 2 teammates. Export PNG or Spec JSON — files land in your Downloads folder.',
   },
+  {
+    title: 'Ask AI via Spec',
+    body: 'Open Spec → Ask AI, paste the prompt into ChatGPT/Claude/Cursor, then Import the JSON. Undo with Ctrl+Z if needed.',
+  },
 ]
 
 type QuickGuideProps = {
@@ -40,7 +44,7 @@ export function QuickGuide({ open, onOpenChange, onStart }: QuickGuideProps) {
         <DialogHeader>
           <DialogTitle>Quick guide</DialogTitle>
           <DialogDescription>
-            Four steps to map your architecture in minutes.
+            Five steps to map your architecture in minutes.
           </DialogDescription>
         </DialogHeader>
         <ol className="space-y-4 py-2">

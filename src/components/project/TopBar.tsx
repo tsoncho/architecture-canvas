@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { PresenceAvatars } from '@/components/collaboration/PresenceAvatars'
+import { syncEngine } from '@/features/collaboration/sync'
 import { exportPng } from '@/features/export/png'
 import { renameProject } from '@/features/projects/api'
 import { downloadsFolderMessage } from '@/lib/download'
@@ -127,6 +128,9 @@ export function TopBar({
     if (!host || !project) return
     setExporting(true)
     try {
+      // Fit all nodes into view so the PNG captures the full diagram.
+      window.dispatchEvent(new Event('architecture-canvas:fit-view'))
+      await new Promise((r) => window.setTimeout(r, 120))
       const fileName = await exportPng(host, `${project.name || 'architecture'}.png`)
       toast(downloadsFolderMessage(fileName))
     } catch {
@@ -231,17 +235,28 @@ export function TopBar({
           </DropdownMenu>
         )}
 
-        <span
+        <button
+          type="button"
           className={cn(
-            'hidden max-w-[14rem] truncate text-xs text-[var(--color-muted)] sm:inline',
-            saveStatus === 'error' && 'text-red-600',
+            'hidden max-w-[14rem] truncate text-left text-xs text-[var(--color-muted)] sm:inline',
+            saveStatus === 'error' && 'cursor-pointer text-red-600 underline-offset-2 hover:underline',
             saveStatus === 'offline' && 'text-amber-600',
             saveStatus === 'live' && 'text-emerald-600',
           )}
-          title={syncError ?? SAVE_LABEL[saveStatus]}
+          title={
+            saveStatus === 'error'
+              ? `${syncError ?? "Couldn't sync"} — click to retry`
+              : (syncError ?? SAVE_LABEL[saveStatus])
+          }
+          onClick={() => {
+            if (saveStatus === 'error') {
+              toast('Retrying sync…', 'info')
+              syncEngine.retryFlush()
+            }
+          }}
         >
           {saveStatus === 'error' && syncError ? syncError : SAVE_LABEL[saveStatus]}
-        </span>
+        </button>
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2">

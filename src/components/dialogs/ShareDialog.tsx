@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,6 +10,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { leaveProject } from '@/features/projects/api'
+import { removeRecentProjectLocal } from '@/lib/storage/local'
+import { useIdentityStore } from '@/stores/identity-store'
 import { toast } from '@/stores/toast-store'
 import type { ProjectMember } from '@/types'
 
@@ -17,6 +21,7 @@ const MAX_MEMBERS = 3
 type ShareDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  projectId: string
   joinCode: string
   members: ProjectMember[]
   currentUserId: string
@@ -25,13 +30,37 @@ type ShareDialogProps = {
 export function ShareDialog({
   open,
   onOpenChange,
+  projectId,
   joinCode,
   members,
   currentUserId,
 }: ShareDialogProps) {
+  const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const fullMessage = `Join my Architecture Canvas project with code ${joinCode}`
   const isFull = members.length >= MAX_MEMBERS
+
+  const onLeave = async () => {
+    const ok = window.confirm('Leave this project? You can rejoin later with the share code.')
+    if (!ok) return
+    setLeaving(true)
+    try {
+      await leaveProject(projectId)
+      await removeRecentProjectLocal(projectId)
+      const settings = useIdentityStore.getState().settings
+      if (settings.lastProjectId === projectId) {
+        useIdentityStore.getState().updateSettings({ lastProjectId: null })
+      }
+      toast('Left project')
+      onOpenChange(false)
+      navigate('/home')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not leave project.', 'error')
+    } finally {
+      setLeaving(false)
+    }
+  }
 
   const copyText = async (value: string, label = 'Copied') => {
     try {
@@ -99,7 +128,16 @@ export function ShareDialog({
             )}
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-red-600"
+            disabled={leaving}
+            onClick={() => void onLeave()}
+          >
+            {leaving ? 'Leaving…' : 'Leave project'}
+          </Button>
           <Button
             type="button"
             variant="secondary"

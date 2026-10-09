@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { checkForAppUpdate } from '@/lib/updater'
 import { useIdentityStore } from '@/stores/identity-store'
 
 type SettingsDialogProps = {
@@ -21,6 +23,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const settings = useIdentityStore((s) => s.settings)
   const updateSettings = useIdentityStore((s) => s.updateSettings)
   const setDisplayName = useIdentityStore((s) => s.setDisplayName)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+
+  const onCheckUpdate = async () => {
+    setCheckingUpdate(true)
+    try {
+      await checkForAppUpdate({ quiet: false })
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,6 +72,21 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               onChange={(e) => updateSettings({ displayName: e.target.value })}
               onBlur={() => setDisplayName(settings.displayName)}
             />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2.5">
+            <div>
+              <p className="text-sm font-medium">Updates</p>
+              <p className="text-xs text-[var(--color-muted)]">Check GitHub Releases for a new build</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={checkingUpdate}
+              onClick={() => void onCheckUpdate()}
+            >
+              {checkingUpdate ? 'Checking…' : 'Check'}
+            </Button>
           </div>
         </div>
         <DialogFooter>
