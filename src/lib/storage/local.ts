@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   reducedMotion: false,
   displayName: '',
   onboardingSeen: false,
+  lastProjectId: null,
 }
 
 interface ArchitectureCanvasDB extends DBSchema {
@@ -84,7 +85,7 @@ export async function getSettings(): Promise<AppSettings> {
   const db = await getDb()
   const value = await db.get('kv', SETTINGS_KEY)
   if (!value || !('appearance' in value)) return { ...DEFAULT_SETTINGS }
-  return value
+  return { ...DEFAULT_SETTINGS, ...(value as AppSettings) }
 }
 
 export async function setSettings(settings: AppSettings): Promise<void> {
@@ -104,6 +105,23 @@ export async function getRecentProjects(): Promise<RecentProject[]> {
 export async function upsertRecentProject(project: RecentProject): Promise<void> {
   const db = await getDb()
   await db.put('recentProjects', project)
+  // Keep localStorage in sync — Welcome/Home read from identity-store sync API.
+  const { recordRecentProject } = await import('@/stores/identity-store')
+  recordRecentProject(project)
+}
+
+/** Copy IndexedDB recents into localStorage so older installs show them on Welcome/Home. */
+export async function syncRecentProjectsToLocalStorage(): Promise<RecentProject[]> {
+  const items = await getRecentProjects()
+  if (items.length === 0) return []
+  const { recordRecentProject, getRecentProjects: getLocal } = await import(
+    '@/stores/identity-store'
+  )
+  // Write oldest first so newest ends up first via unshift.
+  for (const item of [...items].reverse()) {
+    recordRecentProject(item)
+  }
+  return getLocal()
 }
 
 export async function getSnapshot(

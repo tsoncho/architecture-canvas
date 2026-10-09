@@ -1,10 +1,53 @@
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { getRecentProjects } from '@/stores/identity-store'
+import { getRecentProjects, useIdentityStore } from '@/stores/identity-store'
+import { syncRecentProjectsToLocalStorage } from '@/lib/storage/local'
 import { formatRelativeTime } from '@/lib/utils'
+import type { RecentProject } from '@/types'
 
 export function WelcomePage() {
-  const recent = getRecentProjects()
+  const navigate = useNavigate()
+  const settings = useIdentityStore((s) => s.settings)
+  const [recent, setRecent] = useState<RecentProject[]>(() => getRecentProjects())
+  const [ready, setReady] = useState(false)
+
+  const displayName = settings.displayName.trim()
+  const lastProject =
+    recent.find((p) => p.id === settings.lastProjectId) ?? recent[0] ?? null
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const local = getRecentProjects()
+      if (local.length > 0) {
+        if (!cancelled) {
+          setRecent(local)
+          setReady(true)
+        }
+        return
+      }
+      const migrated = await syncRecentProjectsToLocalStorage()
+      if (!cancelled) {
+        setRecent(migrated.length > 0 ? migrated : getRecentProjects())
+        setReady(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
+    // One auto-resume per browser session so Home/Welcome stay reachable afterward.
+    const flag = 'architecture-canvas:did-auto-resume'
+    if (sessionStorage.getItem(flag)) return
+    if (displayName && lastProject && settings.lastProjectId === lastProject.id) {
+      sessionStorage.setItem(flag, '1')
+      navigate(`/project/${lastProject.id}`, { replace: true })
+    }
+  }, [ready, displayName, lastProject, settings.lastProjectId, navigate])
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center px-6 py-16">
@@ -16,8 +59,25 @@ export function WelcomePage() {
         <p className="mt-3 text-sm text-[var(--color-muted)]">
           Design architecture diagrams with live collaboration — minimal, fast, and shareable.
         </p>
-        <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Button asChild>
+        {displayName ? (
+          <p className="mt-4 text-sm text-[var(--color-muted)]">
+            Signed in as <span className="font-medium text-[var(--color-ink)]">{displayName}</span>
+          </p>
+        ) : null}
+        {lastProject ? (
+          <div className="mt-8">
+            <Button asChild className="w-full sm:w-auto">
+              <Link to={`/project/${lastProject.id}`}>
+                Continue “{lastProject.name}”
+              </Link>
+            </Button>
+            <p className="mt-2 text-xs text-[var(--color-muted)]">
+              Opened {formatRelativeTime(lastProject.lastOpenedAt)}
+            </p>
+          </div>
+        ) : null}
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <Button asChild variant={lastProject ? 'outline' : 'default'}>
             <Link to="/create">Create project</Link>
           </Button>
           <Button asChild variant="outline">
@@ -33,7 +93,7 @@ export function WelcomePage() {
               </Link>
             </div>
             <ul className="space-y-2">
-              {recent.slice(0, 3).map((p) => (
+              {recent.slice(0, 5).map((p) => (
                 <li key={p.id}>
                   <Link
                     to={`/project/${p.id}`}

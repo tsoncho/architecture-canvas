@@ -11,6 +11,7 @@ const defaultSettings: AppSettings = {
   reducedMotion: false,
   displayName: '',
   onboardingSeen: false,
+  lastProjectId: null,
 }
 
 function readJson<T>(key: string): T | null {

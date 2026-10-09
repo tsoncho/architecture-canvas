@@ -78,6 +78,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
 
   const { screenToFlowPosition, fitView, getViewport } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const didFitRef = useRef(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(initialContextMenu)
   const [pendingType, setPendingType] = useState<NodeType>(defaultNodeType)
 
@@ -85,14 +86,34 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   const flowEdges = useMemo(() => edges.map(toFlowEdge), [edges])
   const [displayNodes, setDisplayNodes] = useState(flowNodes)
 
+  // Keep React Flow's transient UI state (selection / drag) while always
+  // reconciling the node *set* from the project store. A full replace used to
+  // race with onNodesChange and drop nodes from the canvas while Spec still
+  // had them (e.g. after accent color edits).
   useEffect(() => {
-    setDisplayNodes(flowNodes)
+    setDisplayNodes((prev) => {
+      const prevById = new Map(prev.map((n) => [n.id, n]))
+      return flowNodes.map((next) => {
+        const old = prevById.get(next.id)
+        if (!old) return next
+        return {
+          ...next,
+          selected: old.selected,
+          dragging: old.dragging,
+          position: old.dragging ? old.position : next.position,
+        }
+      })
+    })
   }, [flowNodes])
 
   const onNodesChange = useCallback((changes: NodeChange<Node<ArchitectureFlowData>>[]) => {
+    // Deletes go through the project store / shortcuts — ignoring RF "remove"
+    // changes prevents the display layer from diverging from Spec/store.
+    const safe = changes.filter((change) => change.type !== 'remove')
+    if (safe.length === 0) return
     setDisplayNodes(
       (current) =>
-        applyNodeChanges(changes, current) as Node<ArchitectureFlowData>[],
+        applyNodeChanges(safe, current) as Node<ArchitectureFlowData>[],
     )
   }, [])
 
@@ -294,6 +315,13 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     setZoom(vp.zoom)
   }, [getViewport, setZoom])
 
+  useEffect(() => {
+    if (didFitRef.current || nodes.length === 0) return
+    didFitRef.current = true
+    const timer = window.setTimeout(() => fitView({ padding: 0.2 }), 0)
+    return () => clearTimeout(timer)
+  }, [nodes.length, fitView])
+
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault()
     setContextMenu({
@@ -340,7 +368,6 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onMove={(_, viewport) => setZoom(viewport.zoom)}
-        fitView
         selectionMode={SelectionMode.Partial}
         nodesDraggable
         nodesConnectable

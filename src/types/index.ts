@@ -89,6 +89,8 @@ export type AppSettings = {
   reducedMotion: boolean
   displayName: string
   onboardingSeen: boolean
+  /** Last project opened in the editor — used to resume on launch. */
+  lastProjectId: string | null
 }
 
 export type OutboxItem = {

@@ -42,8 +42,11 @@ export function PropertyPanel() {
 
   const persistNode = (patch: { name?: string; technology?: string; color?: string }) => {
     if (!node) return
+    // Read latest from the store so rapid accent picks don't overwrite with a stale node.
+    const current =
+      useProjectStore.getState().nodes.find((n) => n.id === node.id) ?? node
     const updated = {
-      ...node,
+      ...current,
       ...patch,
       updatedAt: new Date().toISOString(),
     }

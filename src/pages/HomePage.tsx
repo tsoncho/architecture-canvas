@@ -1,17 +1,42 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { getRecentProjects } from '@/stores/identity-store'
+import { getRecentProjects, useIdentityStore } from '@/stores/identity-store'
+import { syncRecentProjectsToLocalStorage } from '@/lib/storage/local'
 import { formatRelativeTime } from '@/lib/utils'
+import type { RecentProject } from '@/types'
 
 export function HomePage() {
-  const recent = getRecentProjects()
+  const settings = useIdentityStore((s) => s.settings)
+  const [recent, setRecent] = useState<RecentProject[]>(() => getRecentProjects())
+  const displayName = settings.displayName.trim()
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const local = getRecentProjects()
+      if (local.length > 0) {
+        if (!cancelled) setRecent(local)
+        return
+      }
+      const migrated = await syncRecentProjectsToLocalStorage()
+      if (!cancelled) setRecent(migrated.length > 0 ? migrated : getRecentProjects())
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-          <p className="mt-1 text-sm text-[var(--color-muted)]">Pick up where you left off.</p>
+          <p className="mt-1 text-sm text-[var(--color-muted)]">
+            {displayName
+              ? `Pick up where you left off, ${displayName}.`
+              : 'Pick up where you left off.'}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm">
@@ -41,6 +66,7 @@ export function HomePage() {
                 <p className="mt-1 font-mono text-xs text-[var(--color-muted)]">{p.joinCode}</p>
                 <p className="mt-3 text-xs text-[var(--color-muted)]">
                   Opened {formatRelativeTime(p.lastOpenedAt)}
+                  {settings.lastProjectId === p.id ? ' · Last opened' : ''}
                 </p>
               </Link>
             </li>

@@ -89,6 +89,7 @@ export function EditorPage() {
           lastOpenedAt: new Date().toISOString(),
           updatedAt: snapshot.project.updatedAt,
         })
+        updateSettings({ lastProjectId: snapshot.project.id })
         if (uid) {
           await syncEngine.start(projectId, uid, displayName)
           await touchMember(projectId).catch(() => {})
@@ -124,6 +125,7 @@ export function EditorPage() {
     displayName,
     settings.onboardingSeen,
     setOnboardingOpen,
+    updateSettings,
   ])
 
   if (!projectId) {

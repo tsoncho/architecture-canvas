@@ -18,11 +18,10 @@ export function toFlowNode(node: ArchitectureNode): Node<ArchitectureFlowData> {
     position: { x: node.positionX, y: node.positionY },
     data: { architectureNode: node },
     style: {
-      width: node.width,
-      height: node.height,
+      width: node.width || 220,
+      height: node.height || 88,
     },
     zIndex: node.zIndex,
-    selected: false,
   }
 }
 
