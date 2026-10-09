@@ -67,7 +67,7 @@ export type PresenceUser = {
   selectedIds?: string[]
 }
 
-export type SaveStatus = 'saved' | 'saving' | 'offline' | 'error'
+export type SaveStatus = 'saved' | 'saving' | 'offline' | 'error' | 'live'
 
 export type RecentProject = {
   id: string
@@ -84,7 +84,8 @@ export type LocalIdentity = {
 }
 
 export type AppSettings = {
-  appearance: 'system' | 'light' | 'dark'
+  /** Locked to light — kept for stored settings compatibility. */
+  appearance: 'light'
   showGrid: boolean
   reducedMotion: boolean
   displayName: string

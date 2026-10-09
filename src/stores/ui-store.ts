@@ -11,6 +11,7 @@ type UiState = {
   onboardingOpen: boolean
   specOpen: boolean
   saveStatus: SaveStatus
+  syncError: string | null
   zoom: number
   connectMode: boolean
   addMenuOpen: boolean
@@ -23,6 +24,7 @@ type UiState = {
   setOnboardingOpen: (open: boolean) => void
   setSpecOpen: (open: boolean) => void
   setSaveStatus: (status: SaveStatus) => void
+  setSyncError: (message: string | null) => void
   setZoom: (zoom: number) => void
   setConnectMode: (on: boolean) => void
   setAddMenuOpen: (open: boolean) => void
@@ -39,6 +41,7 @@ export const useUiStore = create<UiState>((set) => ({
   onboardingOpen: false,
   specOpen: false,
   saveStatus: 'saved',
+  syncError: null,
   zoom: 1,
   connectMode: false,
   addMenuOpen: false,
@@ -51,6 +54,7 @@ export const useUiStore = create<UiState>((set) => ({
   setOnboardingOpen: (open) => set({ onboardingOpen: open }),
   setSpecOpen: (open) => set({ specOpen: open }),
   setSaveStatus: (status) => set({ saveStatus: status }),
+  setSyncError: (message) => set({ syncError: message }),
   setZoom: (zoom) => set({ zoom }),
   setConnectMode: (on) => set({ connectMode: on }),
   setAddMenuOpen: (open) => set({ addMenuOpen: open }),

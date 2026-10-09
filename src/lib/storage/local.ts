@@ -14,7 +14,7 @@ const IDENTITY_KEY = 'identity'
 const SETTINGS_KEY = 'settings'
 
 const DEFAULT_SETTINGS: AppSettings = {
-  appearance: 'system',
+  appearance: 'light',
   showGrid: true,
   reducedMotion: false,
   displayName: '',
@@ -85,7 +85,7 @@ export async function getSettings(): Promise<AppSettings> {
   const db = await getDb()
   const value = await db.get('kv', SETTINGS_KEY)
   if (!value || !('appearance' in value)) return { ...DEFAULT_SETTINGS }
-  return { ...DEFAULT_SETTINGS, ...(value as AppSettings) }
+  return { ...DEFAULT_SETTINGS, ...(value as AppSettings), appearance: 'light' }
 }
 
 export async function setSettings(settings: AppSettings): Promise<void> {

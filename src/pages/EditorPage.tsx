@@ -11,7 +11,6 @@ import { EditorToolbar } from '@/components/toolbar/EditorToolbar'
 import { QuickGuide } from '@/features/onboarding/QuickGuide'
 import { syncEngine } from '@/features/collaboration/sync'
 import { ensureAuth, loadProject, touchMember } from '@/features/projects/api'
-import { applyAppearanceClass } from '@/lib/appearance'
 import { getSnapshot, upsertRecentProject } from '@/lib/storage/local'
 import { useIdentityStore } from '@/stores/identity-store'
 import { useProjectStore } from '@/stores/project-store'
@@ -60,14 +59,10 @@ export function EditorPage() {
       setLoading(true)
       setLoadError(null)
       try {
-        let uid: string | null = null
-        try {
-          uid = await ensureAuth()
-        } catch {
-          uid = null
-        }
+        // Cloud sync is required for multi-PC collaboration — never silently go offline-local.
+        const uid = await ensureAuth()
         if (cancelled) return
-        if (uid) setUserId(uid)
+        setUserId(uid)
 
         let snapshot
         try {
@@ -77,12 +72,12 @@ export function EditorPage() {
           if (!cached) throw onlineError
           snapshot = cached
           useUiStore.getState().setSaveStatus('offline')
+          useUiStore
+            .getState()
+            .setSyncError('Working from local cache — reconnect to sync with teammates.')
         }
         if (cancelled) return
         setProjectData(snapshot)
-        if (!uid) {
-          setUserId('offline-local')
-        }
         await upsertRecentProject({
           id: snapshot.project.id,
           name: snapshot.project.name,
@@ -92,10 +87,8 @@ export function EditorPage() {
           updatedAt: snapshot.project.updatedAt,
         })
         updateSettings({ lastProjectId: snapshot.project.id })
-        if (uid) {
-          await syncEngine.start(projectId, uid, displayName)
-          await touchMember(projectId).catch(() => {})
-        }
+        await syncEngine.start(projectId, uid, displayName)
+        await touchMember(projectId).catch(() => {})
         if (!settings.onboardingSeen) {
           setOnboardingOpen(true)
         }
@@ -182,11 +175,7 @@ export function EditorPage() {
         currentUserId={userId}
       />
       <SpecDialog open={specOpen} onOpenChange={setSpecOpen} userId={userId} />
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        onAppearanceChange={(appearance) => applyAppearanceClass({ ...settings, appearance })}
-      />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       <QuickGuide
         open={onboardingOpen}

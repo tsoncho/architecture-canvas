@@ -6,7 +6,7 @@ const SETTINGS_KEY = 'architecture-canvas:settings'
 const RECENT_KEY = 'architecture-canvas:recent'
 
 const defaultSettings: AppSettings = {
-  appearance: 'system',
+  appearance: 'light',
   showGrid: true,
   reducedMotion: false,
   displayName: '',
@@ -62,10 +62,12 @@ export const useIdentityStore = create<IdentityState>((set, get) => ({
 
   hydrate: () => {
     const storedIdentity = readJson<LocalIdentity>(IDENTITY_KEY)
-    const storedSettings = readJson<AppSettings>(SETTINGS_KEY)
+    const storedSettings = readJson<Partial<AppSettings>>(SETTINGS_KEY)
     set({
       identity: storedIdentity,
-      settings: storedSettings ? { ...defaultSettings, ...storedSettings } : defaultSettings,
+      settings: storedSettings
+        ? { ...defaultSettings, ...storedSettings, appearance: 'light' }
+        : defaultSettings,
       hydrated: true,
     })
   },
@@ -81,7 +83,7 @@ export const useIdentityStore = create<IdentityState>((set, get) => ({
   },
 
   updateSettings: (patch: Partial<AppSettings>) => {
-    const settings = { ...get().settings, ...patch }
+    const settings = { ...get().settings, ...patch, appearance: 'light' as const }
     writeJson(SETTINGS_KEY, settings)
     set({ settings })
   },

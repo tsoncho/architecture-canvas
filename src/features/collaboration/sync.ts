@@ -27,6 +27,8 @@ const PRESENCE_COLORS = [
   '#ca8a04',
 ]
 
+const PULL_MS = 2000
+
 function presenceColor(userId: string): string {
   let hash = 0
   for (let i = 0; i < userId.length; i += 1) {
@@ -46,8 +48,8 @@ function nodeToPayload(node: ArchitectureNode): Record<string, unknown> {
     project_id: node.projectId,
     type: node.type,
     name: node.name,
-    description: node.description,
-    technology: node.technology,
+    description: node.description ?? '',
+    technology: node.technology ?? '',
     color: node.color,
     position_x: node.positionX,
     position_y: node.positionY,
@@ -55,7 +57,7 @@ function nodeToPayload(node: ArchitectureNode): Record<string, unknown> {
     height: node.height,
     z_index: node.zIndex,
     parent_group_id: node.parentGroupId,
-    metadata: node.metadata,
+    metadata: node.metadata ?? {},
     updated_by: node.updatedBy,
   }
 }
@@ -66,41 +68,71 @@ function edgeToPayload(edge: ArchitectureEdge): Record<string, unknown> {
     project_id: edge.projectId,
     source_node_id: edge.sourceNodeId,
     target_node_id: edge.targetNodeId,
-    label: edge.label,
-    edge_type: edge.edgeType,
-    style: edge.style,
+    label: edge.label ?? '',
+    edge_type: edge.edgeType ?? 'default',
+    style: edge.style ?? {},
     updated_by: edge.updatedBy,
   }
+}
+
+function newer(a: string, b: string): boolean {
+  return new Date(a).getTime() >= new Date(b).getTime()
 }
 
 export class SyncEngine {
   private projectId: string | null = null
   private userId: string | null = null
-  private displayName: string = 'Guest'
+  private displayName = 'Guest'
   private channels: RealtimeChannel[] = []
   private presenceChannel: RealtimeChannel | null = null
   private positionTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private flushing = false
+  private pulling = false
+  private pullTimer: ReturnType<typeof setInterval> | null = null
+  private realtimeReady = false
 
   async start(projectId: string, userId: string, displayName: string): Promise<void> {
     await this.stop()
     this.projectId = projectId
     this.userId = userId
     this.displayName = displayName
+    this.realtimeReady = false
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      await supabase.realtime.setAuth(session.access_token)
+    }
+
     await this.persistLocalSnapshot()
     this.subscribeRealtime(projectId)
     await this.startPresence(projectId, userId, displayName)
     window.addEventListener('online', this.handleOnline)
     window.addEventListener('offline', this.handleOffline)
+    document.addEventListener('visibilitychange', this.handleVisibility)
+
     if (!navigator.onLine) {
       useUiStore.getState().setSaveStatus('offline')
     }
+
+    // Immediate pull + periodic poll so peers sync even if WebSockets fail
+    void this.pullRemoteState()
+    this.pullTimer = setInterval(() => {
+      void this.pullRemoteState()
+    }, PULL_MS)
+
     void this.flushOutbox()
   }
 
   async stop(): Promise<void> {
     window.removeEventListener('online', this.handleOnline)
     window.removeEventListener('offline', this.handleOffline)
+    document.removeEventListener('visibilitychange', this.handleVisibility)
+    if (this.pullTimer) {
+      clearInterval(this.pullTimer)
+      this.pullTimer = null
+    }
     for (const ch of this.channels) {
       await supabase.removeChannel(ch)
     }
@@ -115,14 +147,23 @@ export class SyncEngine {
     this.positionTimers.clear()
     this.projectId = null
     this.userId = null
+    this.realtimeReady = false
   }
 
   private handleOnline = (): void => {
     void this.flushOutbox()
+    void this.pullRemoteState()
   }
 
   private handleOffline = (): void => {
     useUiStore.getState().setSaveStatus('offline')
+  }
+
+  private handleVisibility = (): void => {
+    if (document.visibilityState === 'visible') {
+      void this.flushOutbox()
+      void this.pullRemoteState()
+    }
   }
 
   private subscribeRealtime(projectId: string): void {
@@ -137,11 +178,10 @@ export class SyncEngine {
           filter: `project_id=eq.${projectId}`,
         },
         (payload) => {
+          this.realtimeReady = true
           if (payload.eventType === 'DELETE') {
             const old = payload.old as { id?: string }
-            if (old.id) {
-              useProjectStore.getState().applyRemoteNodeDelete(old.id)
-            }
+            if (old.id) useProjectStore.getState().applyRemoteNodeDelete(old.id)
             return
           }
           const row = payload.new
@@ -149,7 +189,9 @@ export class SyncEngine {
           useProjectStore.getState().applyRemoteNode(mapNode(row as never))
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') this.realtimeReady = true
+      })
 
     const edgesChannel = supabase
       .channel(`edges:${projectId}`)
@@ -162,11 +204,10 @@ export class SyncEngine {
           filter: `project_id=eq.${projectId}`,
         },
         (payload) => {
+          this.realtimeReady = true
           if (payload.eventType === 'DELETE') {
             const old = payload.old as { id?: string }
-            if (old.id) {
-              useProjectStore.getState().applyRemoteEdgeDelete(old.id)
-            }
+            if (old.id) useProjectStore.getState().applyRemoteEdgeDelete(old.id)
             return
           }
           const row = payload.new
@@ -203,6 +244,92 @@ export class SyncEngine {
       .subscribe()
 
     this.channels = [nodesChannel, edgesChannel, membersChannel]
+  }
+
+  /** REST poll — keeps peers aligned when Realtime WebSockets are blocked. */
+  async pullRemoteState(): Promise<void> {
+    if (!this.projectId || this.pulling || !navigator.onLine) return
+    this.pulling = true
+    try {
+      const projectId = this.projectId
+      const [nodesRes, edgesRes, membersRes, pending] = await Promise.all([
+        supabase.from('nodes').select('*').eq('project_id', projectId),
+        supabase.from('edges').select('*').eq('project_id', projectId),
+        supabase.from('project_members').select('*').eq('project_id', projectId),
+        listOutbox(projectId),
+      ])
+
+      if (nodesRes.error || edgesRes.error) {
+        useUiStore.getState().setSyncError(
+          nodesRes.error?.message || edgesRes.error?.message || 'Pull failed',
+        )
+        return
+      }
+
+      const pendingNodeIds = new Set(
+        pending
+          .filter((i) => i.table === 'nodes' && i.op !== 'delete')
+          .map((i) => String(i.payload.id)),
+      )
+      const pendingEdgeIds = new Set(
+        pending
+          .filter((i) => i.table === 'edges' && i.op !== 'delete')
+          .map((i) => String(i.payload.id)),
+      )
+      const pendingDeletes = new Set(
+        pending.filter((i) => i.op === 'delete').map((i) => String(i.payload.id)),
+      )
+
+      const remoteNodes = (nodesRes.data ?? []).map(mapNode)
+      const remoteEdges = (edgesRes.data ?? []).map(mapEdge)
+      const state = useProjectStore.getState()
+
+      const nodeMap = new Map(state.nodes.map((n) => [n.id, n]))
+      for (const remote of remoteNodes) {
+        if (pendingDeletes.has(remote.id)) continue
+        const local = nodeMap.get(remote.id)
+        if (!local || newer(remote.updatedAt, local.updatedAt)) {
+          nodeMap.set(remote.id, remote)
+        }
+      }
+      for (const id of [...nodeMap.keys()]) {
+        if (remoteNodes.some((n) => n.id === id)) continue
+        if (pendingNodeIds.has(id)) continue
+        nodeMap.delete(id)
+      }
+
+      const edgeMap = new Map(state.edges.map((e) => [e.id, e]))
+      for (const remote of remoteEdges) {
+        if (pendingDeletes.has(remote.id)) continue
+        const local = edgeMap.get(remote.id)
+        if (!local || newer(remote.updatedAt, local.updatedAt)) {
+          edgeMap.set(remote.id, remote)
+        }
+      }
+      for (const id of [...edgeMap.keys()]) {
+        if (remoteEdges.some((e) => e.id === id)) continue
+        if (pendingEdgeIds.has(id)) continue
+        edgeMap.delete(id)
+      }
+
+      useProjectStore.setState({
+        nodes: [...nodeMap.values()],
+        edges: [...edgeMap.values()],
+      })
+
+      if (!membersRes.error && membersRes.data) {
+        useProjectStore.getState().setMembers(membersRes.data.map(mapProjectMember))
+      }
+
+      useUiStore.getState().setSyncError(null)
+      if (useUiStore.getState().saveStatus === 'saved' || useUiStore.getState().saveStatus === 'live') {
+        useUiStore.getState().setSaveStatus(this.realtimeReady ? 'live' : 'saved')
+      }
+    } catch (e) {
+      useUiStore.getState().setSyncError(e instanceof Error ? e.message : 'Pull failed')
+    } finally {
+      this.pulling = false
+    }
   }
 
   private async startPresence(
@@ -261,11 +388,10 @@ export class SyncEngine {
         selectedIds,
       })
     } catch {
-      // Presence is best-effort.
+      // best-effort
     }
   }
 
-  /** After local undo/redo, push the restored graph so peers stay aligned. */
   async syncUndoSnapshot(
     beforeNodeIds: string[],
     beforeEdgeIds: string[],
@@ -338,7 +464,7 @@ export class SyncEngine {
       projectId: this.projectId,
       table: 'nodes',
       op: 'insert',
-      payload: nodeToPayload(node),
+      payload: nodeToPayload({ ...node, updatedBy: this.userId }),
     })
   }
 
@@ -368,7 +494,7 @@ export class SyncEngine {
       projectId: this.projectId,
       table: 'edges',
       op: 'insert',
-      payload: edgeToPayload(edge),
+      payload: edgeToPayload({ ...edge, updatedBy: this.userId }),
     })
   }
 
@@ -388,14 +514,29 @@ export class SyncEngine {
     useUiStore.getState().setSaveStatus('saving')
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session) {
+        throw humanError('Not signed in — reopen the project.')
+      }
+      if (session.access_token) {
+        await supabase.realtime.setAuth(session.access_token)
+      }
+
       const items = await listOutbox(this.projectId)
       for (const item of items) {
         await this.applyOutboxItem(item)
         await removeOutbox(item.id)
       }
-      useUiStore.getState().setSaveStatus('saved')
+      useUiStore.getState().setSyncError(null)
+      useUiStore.getState().setSaveStatus(this.realtimeReady ? 'live' : 'saved')
       await this.persistLocalSnapshot()
-    } catch {
+      // Pull after push so we absorb peer edits immediately
+      void this.pullRemoteState()
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not sync'
+      useUiStore.getState().setSyncError(message)
       useUiStore.getState().setSaveStatus(navigator.onLine ? 'error' : 'offline')
     } finally {
       this.flushing = false
@@ -408,11 +549,11 @@ export class SyncEngine {
       if (item.op === 'delete') {
         const id = payload.id as string
         const { error } = await supabase.from('nodes').delete().eq('id', id)
-        if (error) throw humanError('Could not sync node removal.')
+        if (error) throw humanError(error.message || 'Could not sync node removal.')
         return
       }
-      const { error } = await supabase.from('nodes').upsert(payload as never)
-      if (error) throw humanError('Could not sync node changes.')
+      const { error } = await supabase.from('nodes').upsert(payload as never, { onConflict: 'id' })
+      if (error) throw humanError(error.message || 'Could not sync node changes.')
       return
     }
 
@@ -420,11 +561,11 @@ export class SyncEngine {
       if (item.op === 'delete') {
         const id = payload.id as string
         const { error } = await supabase.from('edges').delete().eq('id', id)
-        if (error) throw humanError('Could not sync connection removal.')
+        if (error) throw humanError(error.message || 'Could not sync connection removal.')
         return
       }
-      const { error } = await supabase.from('edges').upsert(payload as never)
-      if (error) throw humanError('Could not sync connection changes.')
+      const { error } = await supabase.from('edges').upsert(payload as never, { onConflict: 'id' })
+      if (error) throw humanError(error.message || 'Could not sync connection changes.')
     }
   }
 }

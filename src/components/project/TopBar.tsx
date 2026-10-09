@@ -42,6 +42,7 @@ type TopBarProps = {
 
 const SAVE_LABEL = {
   saved: '✓ Saved',
+  live: '● Live',
   saving: 'Saving…',
   offline: 'Offline · local',
   error: "Couldn't sync",
@@ -61,6 +62,7 @@ export function TopBar({
   const displayName = useIdentityStore((s) => s.settings.displayName)
   const updateSettings = useIdentityStore((s) => s.updateSettings)
   const saveStatus = useUiStore((s) => s.saveStatus)
+  const syncError = useUiStore((s) => s.syncError)
   const setShareOpen = useUiStore((s) => s.setShareOpen)
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen)
   const setSpecOpen = useUiStore((s) => s.setSpecOpen)
@@ -225,12 +227,14 @@ export function TopBar({
 
         <span
           className={cn(
-            'hidden text-xs text-[var(--color-muted)] sm:inline',
+            'hidden max-w-[14rem] truncate text-xs text-[var(--color-muted)] sm:inline',
             saveStatus === 'error' && 'text-red-600',
             saveStatus === 'offline' && 'text-amber-600',
+            saveStatus === 'live' && 'text-emerald-600',
           )}
+          title={syncError ?? SAVE_LABEL[saveStatus]}
         >
-          {SAVE_LABEL[saveStatus]}
+          {saveStatus === 'error' && syncError ? syncError : SAVE_LABEL[saveStatus]}
         </span>
       </div>
 
