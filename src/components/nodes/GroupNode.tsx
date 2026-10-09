@@ -1,5 +1,6 @@
-import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { type Node, type NodeProps } from '@xyflow/react'
 import type { ArchitectureFlowData } from '@/lib/flow-mappers'
+import { NodeHandles } from '@/components/nodes/NodeHandles'
 import { cn } from '@/lib/utils'
 
 export function GroupNode({ data, selected }: NodeProps<Node<ArchitectureFlowData>>) {
@@ -7,7 +8,7 @@ export function GroupNode({ data, selected }: NodeProps<Node<ArchitectureFlowDat
   return (
     <div
       className={cn(
-        'relative h-full w-full rounded-lg border-2 border-dashed bg-transparent',
+        'group/node relative h-full w-full rounded-lg border-2 border-dashed bg-transparent',
         selected ? 'border-[var(--color-accent)]' : 'border-[var(--color-muted)]/50',
       )}
     >
@@ -17,8 +18,7 @@ export function GroupNode({ data, selected }: NodeProps<Node<ArchitectureFlowDat
       >
         {node.name}
       </div>
-      <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
+      <NodeHandles />
     </div>
   )
 }

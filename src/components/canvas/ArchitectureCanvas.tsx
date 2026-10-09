@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
+  ConnectionMode,
   ReactFlow,
   ReactFlowProvider,
   SelectionMode,
@@ -191,17 +192,28 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!project || !connection.source || !connection.target) return
+      if (connection.source === connection.target) return
       const edge = createArchitectureEdge({
         projectId: project.id,
         sourceNodeId: connection.source,
         targetNodeId: connection.target,
         userId,
+        sourceHandle: connection.sourceHandle,
+        targetHandle: connection.targetHandle,
       })
       addEdge(edge)
       void syncEngine.insertEdge(edge)
     },
     [project, userId, addEdge],
   )
+
+  const isValidConnection = useCallback((connection: Connection | Edge) => {
+    const source = 'source' in connection ? connection.source : null
+    const target = 'target' in connection ? connection.target : null
+    if (!source || !target) return false
+    // Allow many edges between the same pair (different sides / parallel links).
+    return source !== target
+  }, [])
 
   const onNodeDragStop = useCallback(
     (
@@ -480,6 +492,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onConnect={onConnect}
+        isValidConnection={isValidConnection}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onSelectionChange={onSelectionChange}
@@ -492,9 +505,11 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         onEdgeContextMenu={onEdgeContextMenu}
         onMove={(_, viewport) => setZoom(viewport.zoom)}
         selectionMode={SelectionMode.Partial}
+        connectionMode={ConnectionMode.Loose}
         nodesDraggable
         nodesConnectable
         elementsSelectable
+        edgesReconnectable
         panOnDrag
         panOnScroll
         zoomOnScroll
@@ -504,7 +519,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         multiSelectionKeyCode="Shift"
         deleteKeyCode={null}
         proOptions={{ hideAttribution: true }}
-        className="bg-[var(--color-canvas)] dark:bg-[var(--color-canvas-dark)]"
+        className="bg-[var(--color-canvas)]"
       >
         {showGrid ? (
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--color-border)" />

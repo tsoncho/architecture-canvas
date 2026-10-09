@@ -39,6 +39,8 @@ export function createArchitectureEdge(input: {
   targetNodeId: string
   userId: string
   label?: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
 }): ArchitectureEdge {
   const now = new Date().toISOString()
   return {
@@ -48,7 +50,10 @@ export function createArchitectureEdge(input: {
     targetNodeId: input.targetNodeId,
     label: input.label ?? '',
     edgeType: 'default',
-    style: {},
+    style: {
+      ...(input.sourceHandle ? { sourceHandle: input.sourceHandle } : {}),
+      ...(input.targetHandle ? { targetHandle: input.targetHandle } : {}),
+    },
     updatedBy: input.userId,
     createdAt: now,
     updatedAt: now,

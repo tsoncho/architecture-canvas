@@ -27,10 +27,16 @@ export function toFlowNode(node: ArchitectureNode): Node<ArchitectureFlowData> {
 }
 
 export function toFlowEdge(edge: ArchitectureEdge): Edge<ArchitectureEdgeData> {
+  const sourceHandle =
+    typeof edge.style.sourceHandle === 'string' ? edge.style.sourceHandle : undefined
+  const targetHandle =
+    typeof edge.style.targetHandle === 'string' ? edge.style.targetHandle : undefined
   return {
     id: edge.id,
     source: edge.sourceNodeId,
     target: edge.targetNodeId,
+    sourceHandle,
+    targetHandle,
     type: 'labeled',
     label: edge.label,
     data: { architectureEdge: edge },

@@ -1,4 +1,4 @@
-import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { type Node, type NodeProps } from '@xyflow/react'
 import {
   AppWindow,
   Cloud,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { NodeType } from '@/types'
 import type { ArchitectureFlowData } from '@/lib/flow-mappers'
+import { NodeHandles } from '@/components/nodes/NodeHandles'
 import { cn } from '@/lib/utils'
 
 const ICONS: Record<Exclude<NodeType, 'group' | 'text'>, typeof AppWindow> = {
@@ -36,14 +37,14 @@ export function ArchitectureNode({ data, selected }: NodeProps<Node<Architecture
   return (
     <div
       className={cn(
-        'flex h-full min-h-[72px] min-w-[160px] flex-col overflow-hidden rounded-md border bg-[var(--color-surface)] text-sm shadow-none dark:bg-[var(--color-surface-dark)]',
+        'group/node flex h-full min-h-[72px] min-w-[160px] flex-col overflow-visible rounded-md border bg-[var(--color-surface)] text-sm shadow-none',
         selected
           ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
-          : 'border-[var(--color-border)] dark:border-[var(--color-border-dark)]',
+          : 'border-[var(--color-border)]',
       )}
     >
-      <div className="h-1 w-full shrink-0" style={{ backgroundColor: node.color }} />
-      <div className="flex flex-1 flex-col gap-1 px-3 py-2">
+      <div className="h-1 w-full shrink-0 rounded-t-[5px]" style={{ backgroundColor: node.color }} />
+      <div className="flex flex-1 flex-col gap-1 overflow-hidden px-3 py-2">
         <div className="flex items-center gap-2">
           <NodeIcon type={node.type} />
           <span className="truncate font-medium leading-tight">{node.name}</span>
@@ -52,8 +53,7 @@ export function ArchitectureNode({ data, selected }: NodeProps<Node<Architecture
           <span className="truncate text-xs text-[var(--color-muted)]">{node.technology}</span>
         ) : null}
       </div>
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-[var(--color-border)] !bg-[var(--color-surface)]" />
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-[var(--color-border)] !bg-[var(--color-surface)]" />
+      <NodeHandles />
     </div>
   )
 }
