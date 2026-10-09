@@ -168,21 +168,33 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   )
 
   const onNodeDragStop = useCallback(
-    (_event: MouseEvent | TouchEvent, node: Node<ArchitectureFlowData>) => {
-      const arch = useProjectStore.getState().nodes.find((n) => n.id === node.id)
-      if (!arch) return
-      const updated: ArchitectureNode = {
-        ...arch,
-        positionX: node.position.x,
-        positionY: node.position.y,
-        updatedAt: new Date().toISOString(),
+    (
+      _event: MouseEvent | TouchEvent,
+      _node: Node<ArchitectureFlowData>,
+      dragged: Node<ArchitectureFlowData>[],
+    ) => {
+      const storeNodes = useProjectStore.getState().nodes
+      const updates: Array<{ id: string; positionX: number; positionY: number }> = []
+      for (const draggedNode of dragged) {
+        const arch = storeNodes.find((n) => n.id === draggedNode.id)
+        if (!arch) continue
+        updates.push({
+          id: draggedNode.id,
+          positionX: draggedNode.position.x,
+          positionY: draggedNode.position.y,
+        })
+        syncEngine.scheduleNodePosition({
+          ...arch,
+          positionX: draggedNode.position.x,
+          positionY: draggedNode.position.y,
+          updatedAt: new Date().toISOString(),
+        })
       }
-      moveNodes([{ id: updated.id, positionX: updated.positionX, positionY: updated.positionY }])
-      syncEngine.scheduleNodePosition(updated)
+      if (updates.length) moveNodes(updates)
       setDragPositions((prev) => {
-        if (!(node.id in prev)) return prev
+        if (Object.keys(prev).length === 0) return prev
         const next = { ...prev }
-        delete next[node.id]
+        for (const draggedNode of dragged) delete next[draggedNode.id]
         return next
       })
     },
@@ -193,16 +205,31 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     ({ nodes: selNodes, edges: selEdges }: OnSelectionChangeParams) => {
       const ids = [...selNodes.map((n) => n.id), ...selEdges.map((e) => e.id)]
       setSelectedIds(ids)
+      // Property panel only for a single node/edge selection.
+      if (selNodes.length === 1 && selEdges.length === 0) {
+        setEditingNodeId(selNodes[0]!.id)
+      } else if (selEdges.length === 1 && selNodes.length === 0) {
+        setEditingEdgeId(selEdges[0]!.id)
+      } else if (selNodes.length === 0 && selEdges.length === 0) {
+        // pane clear handled separately; keep editing until pane click if needed
+      } else {
+        setEditingNodeId(null)
+        setEditingEdgeId(null)
+      }
     },
-    [setSelectedIds],
+    [setSelectedIds, setEditingNodeId, setEditingEdgeId],
   )
 
   const onNodeClick = useCallback(
-    (_event: React.MouseEvent, node: Node<ArchitectureFlowData>) => {
+    (event: React.MouseEvent, node: Node<ArchitectureFlowData>) => {
+      // Let React Flow own multi-select (Shift-click). Don't collapse the selection.
+      if (event.shiftKey || event.metaKey || event.ctrlKey) {
+        setEditingNodeId(null)
+        return
+      }
       setEditingNodeId(node.id)
-      setSelectedIds([node.id])
     },
-    [setEditingNodeId, setSelectedIds],
+    [setEditingNodeId],
   )
 
   const onPaneDoubleClick = useCallback(
@@ -432,10 +459,14 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         nodesDraggable
         nodesConnectable
         elementsSelectable
+        panOnDrag
         panOnScroll
-        selectionOnDrag
-        deleteKeyCode={null}
+        zoomOnScroll
+        zoomOnPinch
+        selectionOnDrag={false}
+        selectionKeyCode="Shift"
         multiSelectionKeyCode="Shift"
+        deleteKeyCode={null}
         proOptions={{ hideAttribution: true }}
         className="bg-[var(--color-canvas)] dark:bg-[var(--color-canvas-dark)]"
       >

@@ -21,6 +21,10 @@ export function PropertyPanel() {
   const updateNode = useProjectStore((s) => s.updateNode)
   const patchNodeLive = useProjectStore((s) => s.patchNodeLive)
   const updateEdge = useProjectStore((s) => s.updateEdge)
+  const selectedIds = useUiStore((s) => s.selectedIds)
+  const selectedNodeCount = useProjectStore(
+    (s) => s.nodes.filter((n) => selectedIds.includes(n.id)).length,
+  )
 
   const [name, setName] = useState('')
   const [technology, setTechnology] = useState('')
@@ -48,7 +52,21 @@ export function PropertyPanel() {
     }
   }, [])
 
-  if (!node && !edge) return null
+  if (!node && !edge) {
+    if (selectedNodeCount > 1) {
+      return (
+        <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] dark:border-[var(--color-border-dark)] dark:bg-[var(--color-surface-dark)]">
+          <div className="border-b border-[var(--color-border)] px-4 py-3 dark:border-[var(--color-border-dark)]">
+            <h2 className="text-sm font-medium">{selectedNodeCount} selected</h2>
+          </div>
+          <div className="p-4 text-sm text-[var(--color-muted)]">
+            Drag together to move. Press Delete to remove. Shift-click to refine the selection.
+          </div>
+        </aside>
+      )
+    }
+    return null
+  }
 
   const latestNode = () =>
     (node && useProjectStore.getState().nodes.find((n) => n.id === node.id)) || node

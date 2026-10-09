@@ -14,16 +14,16 @@ const STEPS = [
     body: 'Use the toolbar or double-click the canvas to place applications, APIs, databases, and more.',
   },
   {
+    title: 'Move freely',
+    body: 'Drag the canvas to pan. Shift-drag to box-select, Shift-click to multi-select, then drag the group together.',
+  },
+  {
     title: 'Connect the flow',
     body: 'Drag from a node handle to another to show how data moves through your system.',
   },
   {
-    title: 'Collaborate live',
-    body: 'Share your project code so teammates join the same diagram with real-time updates.',
-  },
-  {
-    title: 'Refine details',
-    body: 'Select any node or edge to edit names, technology, and labels in the property panel.',
+    title: 'Switch projects anytime',
+    body: 'Open the project name menu to jump between recent projects, create, or join — without restarting.',
   },
 ]
 
