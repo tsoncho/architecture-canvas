@@ -16,7 +16,9 @@ import {
 } from '@/features/spec/format'
 import { buildAiArchitecturePrompt, SPEC_FORMAT_SUMMARY } from '@/features/spec/prompt'
 import { dispatchFitView } from '@/components/canvas/ArchitectureCanvas'
+import { downloadText, downloadsFolderMessage, sanitizeFilename } from '@/lib/download'
 import { useProjectStore } from '@/stores/project-store'
+import { toast } from '@/stores/toast-store'
 import { cn } from '@/lib/utils'
 
 type SpecDialogProps = {
@@ -66,20 +68,19 @@ export function SpecDialog({ open, onOpenChange, userId }: SpecDialogProps) {
       await navigator.clipboard.writeText(text)
       setError(null)
       setStatus(okMessage)
+      toast(okMessage)
     } catch {
       setError('Could not copy to clipboard.')
+      toast('Could not copy to clipboard.', 'error')
     }
   }
 
   const download = (text: string, fileName: string) => {
-    const blob = new Blob([text], { type: 'application/json;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = fileName
-    link.click()
-    URL.revokeObjectURL(url)
-    setStatus('Downloaded.')
+    const savedAs = downloadText(text, fileName)
+    const message = downloadsFolderMessage(savedAs)
+    setError(null)
+    setStatus(message)
+    toast(message)
   }
 
   const onImport = async () => {
@@ -94,7 +95,9 @@ export function SpecDialog({ open, onOpenChange, userId }: SpecDialogProps) {
         projectId: project.id,
         userId,
       })
-      setStatus(`Imported ${spec.nodes.length} components and ${spec.edges.length} connections.`)
+      const message = `Imported ${spec.nodes.length} components and ${spec.edges.length} connections`
+      setStatus(message)
+      toast(message)
       window.setTimeout(() => dispatchFitView(), 50)
       onOpenChange(false)
     } catch (err) {
@@ -164,7 +167,9 @@ export function SpecDialog({ open, onOpenChange, userId }: SpecDialogProps) {
                   onClick={() =>
                     download(
                       exported,
-                      `${(project?.name ?? 'architecture').replace(/\s+/g, '-').toLowerCase()}.architecture.json`,
+                      `${sanitizeFilename(
+                        (project?.name ?? 'architecture').toLowerCase(),
+                      )}.architecture.json`,
                     )
                   }
                 >

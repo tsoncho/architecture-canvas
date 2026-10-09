@@ -19,11 +19,11 @@ const STEPS = [
   },
   {
     title: 'Connect the flow',
-    body: 'Drag from a node handle to another to show how data moves through your system.',
+    body: 'Drag from a node handle to another. Links route cleanly as you rearrange boxes.',
   },
   {
-    title: 'Switch projects anytime',
-    body: 'Open the project name menu to jump between recent projects, create, or join — without restarting.',
+    title: 'Share & export',
+    body: 'Share a join code with up to 2 teammates. Export PNG or Spec JSON — files land in your Downloads folder.',
   },
 ]
 

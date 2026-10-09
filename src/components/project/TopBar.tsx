@@ -26,9 +26,11 @@ import {
 import { PresenceAvatars } from '@/components/collaboration/PresenceAvatars'
 import { exportPng } from '@/features/export/png'
 import { renameProject } from '@/features/projects/api'
+import { downloadsFolderMessage } from '@/lib/download'
 import { removeRecentProjectLocal, upsertRecentProject } from '@/lib/storage/local'
 import { getRecentProjects, useIdentityStore } from '@/stores/identity-store'
 import { useProjectStore } from '@/stores/project-store'
+import { toast } from '@/stores/toast-store'
 import { useUiStore } from '@/stores/ui-store'
 import { cn, formatRelativeTime } from '@/lib/utils'
 import type { RecentProject } from '@/types'
@@ -105,8 +107,9 @@ export function TopBar({
         updatedAt: updated.updatedAt,
       })
       setRecent(getRecentProjects())
+      toast('Project renamed')
     } catch {
-      // Keep previous name on failure.
+      toast('Could not rename project.', 'error')
     }
   }
 
@@ -124,7 +127,10 @@ export function TopBar({
     if (!host || !project) return
     setExporting(true)
     try {
-      await exportPng(host, `${project.name || 'architecture'}.png`)
+      const fileName = await exportPng(host, `${project.name || 'architecture'}.png`)
+      toast(downloadsFolderMessage(fileName))
+    } catch {
+      toast('Could not export PNG. Try again.', 'error')
     } finally {
       setExporting(false)
     }
@@ -248,7 +254,7 @@ export function TopBar({
           onClick={() => void onExportPng()}
         >
           <ImageDown className="mr-1.5 h-3.5 w-3.5" />
-          PNG
+          {exporting ? 'Saving…' : 'PNG'}
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={() => setSpecOpen(true)}>
           <Braces className="mr-1.5 h-3.5 w-3.5" />

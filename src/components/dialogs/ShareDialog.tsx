@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { toast } from '@/stores/toast-store'
 import type { ProjectMember } from '@/types'
 
 const MAX_MEMBERS = 3
@@ -32,13 +33,15 @@ export function ShareDialog({
   const fullMessage = `Join my Architecture Canvas project with code ${joinCode}`
   const isFull = members.length >= MAX_MEMBERS
 
-  const copyText = async (value: string) => {
+  const copyText = async (value: string, label = 'Copied') => {
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
+      toast(label)
       setTimeout(() => setCopied(false), 2000)
     } catch {
       setCopied(false)
+      toast('Could not copy to clipboard.', 'error')
     }
   }
 
@@ -56,7 +59,11 @@ export function ShareDialog({
             <label className="text-xs font-medium text-[var(--color-muted)]">Project code</label>
             <div className="flex gap-2">
               <Input readOnly value={joinCode} className="font-mono tracking-wider" />
-              <Button type="button" variant="outline" onClick={() => void copyText(joinCode)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void copyText(joinCode, 'Join code copied')}
+              >
                 {copied ? 'Copied' : 'Copy'}
               </Button>
             </div>
@@ -93,7 +100,11 @@ export function ShareDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="secondary" onClick={() => void copyText(fullMessage)}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void copyText(fullMessage, 'Invite message copied')}
+          >
             Copy invite message
           </Button>
         </DialogFooter>

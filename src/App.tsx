@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ToastHost } from '@/components/ui/ToastHost'
 import { applyAppearanceClass } from '@/lib/appearance'
 import { ensureAuth } from '@/features/projects/api'
 import { checkForAppUpdate } from '@/lib/updater'
@@ -62,6 +63,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppShell />
+      <ToastHost />
     </BrowserRouter>
   )
 }

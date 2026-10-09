@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Architecture Canvas",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "identifier": "com.architecturecanvas.desktop",
   "build": {
     "frontendDist": "../dist",
