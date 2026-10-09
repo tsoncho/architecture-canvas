@@ -36,6 +36,8 @@ type ProjectState = {
   applyRemoteEdgeDelete: (id: string) => void
   addNode: (node: ArchitectureNode) => void
   updateNode: (id: string, patch: Partial<ArchitectureNode>) => void
+  /** Color/live paint — updates store without pushing undo. */
+  patchNodeLive: (id: string, patch: Partial<ArchitectureNode>) => void
   deleteNodes: (ids: string[]) => void
   addEdge: (edge: ArchitectureEdge) => void
   updateEdge: (id: string, patch: Partial<ArchitectureEdge>) => void
@@ -119,6 +121,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
     }))
     syncUndoFlags(set)
+  },
+
+  patchNodeLive: (id, patch) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+    }))
   },
 
   deleteNodes: (ids) => {

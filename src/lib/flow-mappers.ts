@@ -12,16 +12,17 @@ export type ArchitectureEdgeData = {
 export function toFlowNode(node: ArchitectureNode): Node<ArchitectureFlowData> {
   const flowType =
     node.type === 'group' ? 'group' : node.type === 'text' ? 'text' : 'architecture'
+  const width = node.width > 0 ? node.width : 220
+  const height = node.height > 0 ? node.height : 88
   return {
     id: node.id,
     type: flowType,
     position: { x: node.positionX, y: node.positionY },
     data: { architectureNode: node },
-    style: {
-      width: node.width || 220,
-      height: node.height || 88,
-    },
-    zIndex: node.zIndex,
+    width,
+    height,
+    style: { width, height },
+    zIndex: node.zIndex ?? 1,
   }
 }
 

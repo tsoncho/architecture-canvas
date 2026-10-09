@@ -36,7 +36,7 @@ export function ArchitectureNode({ data, selected }: NodeProps<Node<Architecture
   return (
     <div
       className={cn(
-        'flex h-full min-w-[160px] flex-col overflow-hidden rounded-md border bg-[var(--color-surface)] text-sm shadow-none dark:bg-[var(--color-surface-dark)]',
+        'flex h-full min-h-[72px] min-w-[160px] flex-col overflow-hidden rounded-md border bg-[var(--color-surface)] text-sm shadow-none dark:bg-[var(--color-surface-dark)]',
         selected
           ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
           : 'border-[var(--color-border)] dark:border-[var(--color-border-dark)]',

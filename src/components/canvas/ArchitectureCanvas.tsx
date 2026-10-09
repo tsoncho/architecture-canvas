@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  applyNodeChanges,
   Background,
   BackgroundVariant,
   ReactFlow,
@@ -12,6 +11,7 @@ import {
   type Node,
   type NodeChange,
   type OnSelectionChangeParams,
+  type XYPosition,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { ArchitectureNode as ArchitectureNodeCard } from '@/components/nodes/ArchitectureNode'
@@ -31,9 +31,9 @@ import { useProjectStore } from '@/stores/project-store'
 import { useUiStore } from '@/stores/ui-store'
 import { useIdentityStore } from '@/stores/identity-store'
 import type { ArchitectureEdge, ArchitectureNode, NodeType } from '@/types'
-// ArchitectureNode type alias for clipboard
-type ArchNode = ArchitectureNode
 import { NODE_CATALOG } from '@/lib/node-types'
+
+type ArchNode = ArchitectureNode
 
 const nodeTypes = {
   architecture: ArchitectureNodeCard,
@@ -69,6 +69,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   const undo = useProjectStore((s) => s.undo)
   const redo = useProjectStore((s) => s.redo)
 
+  const selectedIds = useUiStore((s) => s.selectedIds)
   const setSelectedIds = useUiStore((s) => s.setSelectedIds)
   const setEditingNodeId = useUiStore((s) => s.setEditingNodeId)
   const setEditingEdgeId = useUiStore((s) => s.setEditingEdgeId)
@@ -78,43 +79,59 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
 
   const { screenToFlowPosition, fitView, getViewport } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const didFitRef = useRef(false)
+  const fittedForRef = useRef<string>('')
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(initialContextMenu)
   const [pendingType, setPendingType] = useState<NodeType>(defaultNodeType)
+  // Positions while dragging only — membership always comes from the project store.
+  const [dragPositions, setDragPositions] = useState<Record<string, XYPosition>>({})
 
-  const flowNodes = useMemo(() => nodes.map(toFlowNode), [nodes])
-  const flowEdges = useMemo(() => edges.map(toFlowEdge), [edges])
-  const [displayNodes, setDisplayNodes] = useState(flowNodes)
+  const nodeIdsKey = useMemo(() => nodes.map((n) => n.id).sort().join(','), [nodes])
 
-  // Keep React Flow's transient UI state (selection / drag) while always
-  // reconciling the node *set* from the project store. A full replace used to
-  // race with onNodesChange and drop nodes from the canvas while Spec still
-  // had them (e.g. after accent color edits).
-  useEffect(() => {
-    setDisplayNodes((prev) => {
-      const prevById = new Map(prev.map((n) => [n.id, n]))
-      return flowNodes.map((next) => {
-        const old = prevById.get(next.id)
-        if (!old) return next
+  const flowNodes = useMemo(
+    () =>
+      nodes.map((n) => {
+        const base = toFlowNode(n)
+        const drag = dragPositions[n.id]
         return {
-          ...next,
-          selected: old.selected,
-          dragging: old.dragging,
-          position: old.dragging ? old.position : next.position,
+          ...base,
+          position: drag ?? base.position,
+          selected: selectedIds.includes(n.id),
         }
-      })
+      }),
+    [nodes, dragPositions, selectedIds],
+  )
+  const flowEdges = useMemo(() => edges.map(toFlowEdge), [edges])
+
+  // Drop stale drag overlays when the store node set changes (import / undo / delete).
+  useEffect(() => {
+    setDragPositions((prev) => {
+      const ids = new Set(nodes.map((n) => n.id))
+      const next: Record<string, XYPosition> = {}
+      let changed = false
+      for (const [id, pos] of Object.entries(prev)) {
+        if (ids.has(id)) next[id] = pos
+        else changed = true
+      }
+      return changed ? next : prev
     })
-  }, [flowNodes])
+  }, [nodeIdsKey, nodes])
 
   const onNodesChange = useCallback((changes: NodeChange<Node<ArchitectureFlowData>>[]) => {
-    // Deletes go through the project store / shortcuts — ignoring RF "remove"
-    // changes prevents the display layer from diverging from Spec/store.
-    const safe = changes.filter((change) => change.type !== 'remove')
-    if (safe.length === 0) return
-    setDisplayNodes(
-      (current) =>
-        applyNodeChanges(safe, current) as Node<ArchitectureFlowData>[],
-    )
+    // Never apply remove/add/replace here — that was desyncing the canvas from Spec/store.
+    setDragPositions((prev) => {
+      let next: Record<string, XYPosition> | null = null
+      for (const change of changes) {
+        if (change.type !== 'position' || !change.position) continue
+        if (change.dragging) {
+          if (!next) next = { ...prev }
+          next[change.id] = change.position
+        } else if (prev[change.id]) {
+          if (!next) next = { ...prev }
+          delete next[change.id]
+        }
+      }
+      return next ?? prev
+    })
   }, [])
 
   const spawnNode = useCallback(
@@ -152,7 +169,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
 
   const onNodeDragStop = useCallback(
     (_event: MouseEvent | TouchEvent, node: Node<ArchitectureFlowData>) => {
-      const arch = nodes.find((n) => n.id === node.id)
+      const arch = useProjectStore.getState().nodes.find((n) => n.id === node.id)
       if (!arch) return
       const updated: ArchitectureNode = {
         ...arch,
@@ -162,8 +179,14 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       }
       moveNodes([{ id: updated.id, positionX: updated.positionX, positionY: updated.positionY }])
       syncEngine.scheduleNodePosition(updated)
+      setDragPositions((prev) => {
+        if (!(node.id in prev)) return prev
+        const next = { ...prev }
+        delete next[node.id]
+        return next
+      })
     },
-    [nodes, moveNodes],
+    [moveNodes],
   )
 
   const onSelectionChange = useCallback(
@@ -172,6 +195,14 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       setSelectedIds(ids)
     },
     [setSelectedIds],
+  )
+
+  const onNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node<ArchitectureFlowData>) => {
+      setEditingNodeId(node.id)
+      setSelectedIds([node.id])
+    },
+    [setEditingNodeId, setSelectedIds],
   )
 
   const onPaneDoubleClick = useCallback(
@@ -265,13 +296,18 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
           for (const id of nodeIds) void syncEngine.deleteNode(id)
           for (const id of edgeIds) void syncEngine.deleteEdge(id)
           clearSelection()
+          setEditingNodeId(null)
+          setEditingEdgeId(null)
         }
       }
       if (event.ctrlKey && event.key === 'z' && !event.shiftKey) {
         event.preventDefault()
         undo()
       }
-      if (event.ctrlKey && event.key === 'z' && event.shiftKey) {
+      if (
+        (event.ctrlKey && event.key === 'z' && event.shiftKey) ||
+        (event.ctrlKey && event.key === 'y')
+      ) {
         event.preventDefault()
         redo()
       }
@@ -289,7 +325,14 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       }
       if (event.key === 'Escape') {
         clearSelection()
+        setEditingNodeId(null)
+        setEditingEdgeId(null)
         setContextMenu(initialContextMenu)
+      }
+      // Fit when nodes exist but may be off-screen
+      if (event.key === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault()
+        fitView({ padding: 0.2 })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -308,6 +351,9 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     copySelection,
     pasteClipboard,
     setSelectedIds,
+    setEditingNodeId,
+    setEditingEdgeId,
+    fitView,
   ])
 
   useEffect(() => {
@@ -315,34 +361,43 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     setZoom(vp.zoom)
   }, [getViewport, setZoom])
 
+  // Fit whenever the set of node ids changes (open / import / first place).
   useEffect(() => {
-    if (didFitRef.current || nodes.length === 0) return
-    didFitRef.current = true
-    const timer = window.setTimeout(() => fitView({ padding: 0.2 }), 0)
+    if (!nodeIdsKey || fittedForRef.current === nodeIdsKey) return
+    fittedForRef.current = nodeIdsKey
+    const timer = window.setTimeout(() => fitView({ padding: 0.2 }), 30)
     return () => clearTimeout(timer)
-  }, [nodes.length, fitView])
+  }, [nodeIdsKey, fitView])
 
-  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
-    event.preventDefault()
-    setContextMenu({
-      open: true,
-      x: event.clientX,
-      y: event.clientY,
-      nodeId: node.id,
-    })
-    setSelectedIds([node.id])
-  }, [setSelectedIds])
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault()
+      setContextMenu({
+        open: true,
+        x: event.clientX,
+        y: event.clientY,
+        nodeId: node.id,
+      })
+      setSelectedIds([node.id])
+      setEditingNodeId(node.id)
+    },
+    [setSelectedIds, setEditingNodeId],
+  )
 
-  const onEdgeContextMenu = useCallback((event: React.MouseEvent, edge: Edge) => {
-    event.preventDefault()
-    setContextMenu({
-      open: true,
-      x: event.clientX,
-      y: event.clientY,
-      edgeId: edge.id,
-    })
-    setSelectedIds([edge.id])
-  }, [setSelectedIds])
+  const onEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.preventDefault()
+      setContextMenu({
+        open: true,
+        x: event.clientX,
+        y: event.clientY,
+        edgeId: edge.id,
+      })
+      setSelectedIds([edge.id])
+      setEditingEdgeId(edge.id)
+    },
+    [setSelectedIds, setEditingEdgeId],
+  )
 
   return (
     <div
@@ -356,15 +411,20 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     >
       {nodes.length === 0 ? <EmptyHint /> : null}
       <ReactFlow
-        nodes={displayNodes}
+        nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
+        onNodeClick={onNodeClick}
         onSelectionChange={onSelectionChange}
-        onPaneClick={() => setContextMenu(initialContextMenu)}
+        onPaneClick={() => {
+          setContextMenu(initialContextMenu)
+          setEditingNodeId(null)
+          setEditingEdgeId(null)
+        }}
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onMove={(_, viewport) => setZoom(viewport.zoom)}
@@ -374,6 +434,8 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         elementsSelectable
         panOnScroll
         selectionOnDrag
+        deleteKeyCode={null}
+        multiSelectionKeyCode="Shift"
         proOptions={{ hideAttribution: true }}
         className="bg-[var(--color-canvas)] dark:bg-[var(--color-canvas-dark)]"
       >
@@ -392,14 +454,15 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
           if (contextMenu.nodeId) {
             deleteNodes([contextMenu.nodeId])
             void syncEngine.deleteNode(contextMenu.nodeId)
+            setEditingNodeId(null)
           }
           if (contextMenu.edgeId) {
             deleteEdges([contextMenu.edgeId])
             void syncEngine.deleteEdge(contextMenu.edgeId)
+            setEditingEdgeId(null)
           }
         }}
       />
-      {/* expose type picker hook for toolbar via custom event */}
       <TypeListener onType={setPendingType} />
       <FitViewBridge onFit={() => fitView({ padding: 0.2 })} />
     </div>
@@ -446,5 +509,3 @@ export function dispatchFitView() {
 export function getNodeTypeLabel(type: NodeType): string {
   return NODE_CATALOG[type].label
 }
-
-// Fix: ArchitectureCanvas must wrap with ReactFlowProvider - do in export

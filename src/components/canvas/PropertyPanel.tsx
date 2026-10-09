@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { syncEngine } from '@/features/collaboration/sync'
@@ -19,32 +19,44 @@ export function PropertyPanel() {
   )
 
   const updateNode = useProjectStore((s) => s.updateNode)
+  const patchNodeLive = useProjectStore((s) => s.patchNodeLive)
   const updateEdge = useProjectStore((s) => s.updateEdge)
 
   const [name, setName] = useState('')
   const [technology, setTechnology] = useState('')
   const [color, setColor] = useState('#3b82f6')
   const [label, setLabel] = useState('')
+  const colorUndoArmed = useRef(false)
+  const colorSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (node) {
       setName(node.name)
       setTechnology(node.technology)
       setColor(node.color)
+      colorUndoArmed.current = false
     }
-  }, [node])
+  }, [node?.id])
 
   useEffect(() => {
     if (edge) setLabel(edge.label)
-  }, [edge])
+  }, [edge?.id])
+
+  useEffect(() => {
+    return () => {
+      if (colorSyncTimer.current) clearTimeout(colorSyncTimer.current)
+    }
+  }, [])
 
   if (!node && !edge) return null
 
+  const latestNode = () =>
+    (node && useProjectStore.getState().nodes.find((n) => n.id === node.id)) || node
+
   const persistNode = (patch: { name?: string; technology?: string; color?: string }) => {
     if (!node) return
-    // Read latest from the store so rapid accent picks don't overwrite with a stale node.
-    const current =
-      useProjectStore.getState().nodes.find((n) => n.id === node.id) ?? node
+    const current = latestNode()
+    if (!current) return
     const updated = {
       ...current,
       ...patch,
@@ -52,6 +64,38 @@ export function PropertyPanel() {
     }
     updateNode(node.id, patch)
     void syncEngine.upsertNode(updated)
+  }
+
+  const persistColorLive = (nextColor: string) => {
+    if (!node) return
+    setColor(nextColor)
+    // First change in a drag takes one undo snapshot; further ticks are live-only.
+    if (!colorUndoArmed.current) {
+      updateNode(node.id, { color: nextColor })
+      colorUndoArmed.current = true
+    } else {
+      patchNodeLive(node.id, { color: nextColor })
+    }
+    if (colorSyncTimer.current) clearTimeout(colorSyncTimer.current)
+    colorSyncTimer.current = setTimeout(() => {
+      const current = latestNode()
+      if (!current) return
+      void syncEngine.upsertNode({
+        ...current,
+        color: nextColor,
+        updatedAt: new Date().toISOString(),
+      })
+    }, 120)
+  }
+
+  const finishColorEdit = () => {
+    colorUndoArmed.current = false
+    const current = latestNode()
+    if (!current) return
+    void syncEngine.upsertNode({
+      ...current,
+      updatedAt: new Date().toISOString(),
+    })
   }
 
   const persistEdge = (nextLabel: string) => {
@@ -103,17 +147,23 @@ export function PropertyPanel() {
                 <Input
                   id="node-color"
                   type="color"
-                  value={color}
+                  value={/^#[0-9a-fA-F]{6}$/.test(color) ? color : '#3b82f6'}
                   className="h-9 w-12 cursor-pointer p-1"
-                  onChange={(e) => {
-                    setColor(e.target.value)
-                    persistNode({ color: e.target.value })
-                  }}
+                  onChange={(e) => persistColorLive(e.target.value)}
+                  onBlur={finishColorEdit}
                 />
                 <Input
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  onBlur={() => persistNode({ color })}
+                  onBlur={() => {
+                    const next = color.trim()
+                    if (/^#[0-9a-fA-F]{6}$/.test(next)) {
+                      persistColorLive(next)
+                      finishColorEdit()
+                    } else {
+                      setColor(node.color)
+                    }
+                  }}
                 />
               </div>
             </div>
