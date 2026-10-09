@@ -1,26 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "Cascadia Code", "Consolas", ui-monospace, monospace;
-  --color-canvas: #f4f5f7;
-  --color-canvas-dark: #0f1115;
+  --font-sans: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Code", ui-monospace, monospace;
+  --color-canvas: #f3f4f6;
+  --color-canvas-dark: #0c0e12;
   --color-surface: #ffffff;
-  --color-surface-dark: #171a21;
-  --color-border: #e2e5eb;
+  --color-surface-dark: #151820;
+  --color-border: #e5e7eb;
   --color-border-dark: #2a2f3a;
-  --color-ink: #111827;
+  --color-ink: #0f172a;
   --color-ink-dark: #e8eaef;
-  --color-muted: #6b7280;
-  --color-accent: #2563eb;
-  --radius-sm: 6px;
+  --color-muted: #64748b;
+  --color-accent: #1d4ed8;
+  --radius-sm: 8px;
 }
 
 :root {
   color-scheme: light dark;
   font-family: var(--font-sans);
+  font-feature-settings: "ss01" on, "cv11" on;
   background: var(--color-canvas);
   color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 html.dark {
@@ -31,3 +34,9 @@ html.dark {
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 button { font: inherit; }
+
+.react-flow__node.selected { outline: none; }
+.react-flow__selection {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+}

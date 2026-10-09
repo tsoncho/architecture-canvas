@@ -12,6 +12,7 @@ import type { Json } from '@/lib/supabase/database'
 import type {
   ArchitectureEdge,
   ArchitectureNode,
+  Project,
   ProjectSnapshot,
 } from '@/types'
 import type { ProjectTemplate } from './templates'
@@ -108,6 +109,22 @@ export async function loadProject(projectId: string): Promise<ProjectSnapshot> {
     edges: (edgesRes.data ?? []).map(mapEdge),
     cachedAt: new Date().toISOString(),
   }
+}
+
+export async function renameProject(projectId: string, name: string): Promise<Project> {
+  await ensureAuth()
+  const trimmed = name.trim()
+  if (!trimmed) throw humanError('Enter a project name.')
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ name: trimmed })
+    .eq('id', projectId)
+    .select('*')
+    .single()
+  if (error || !data) {
+    throw humanError('Could not rename the project.')
+  }
+  return mapProject(data)
 }
 
 export async function touchMember(projectId: string): Promise<void> {

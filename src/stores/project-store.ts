@@ -28,6 +28,7 @@ type ProjectState = {
     nodes: ArchitectureNode[]
     edges: ArchitectureEdge[]
   }) => void
+  setProject: (project: Project) => void
   setMembers: (members: ProjectMember[]) => void
   setPresence: (presence: PresenceUser[]) => void
   applyRemoteNode: (node: ArchitectureNode) => void
@@ -67,6 +68,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ project, members, nodes, edges })
     syncUndoFlags(set)
   },
+
+  setProject: (project) => set({ project }),
 
   setMembers: (members) => set({ members }),
 

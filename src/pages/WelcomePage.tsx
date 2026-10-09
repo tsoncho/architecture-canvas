@@ -50,13 +50,13 @@ export function WelcomePage() {
   }, [ready, displayName, lastProject, settings.lastProjectId, navigate])
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center px-6 py-16">
+    <div className="flex min-h-full flex-col items-center justify-center px-6 py-20">
       <div className="w-full max-w-md text-center">
-        <p className="text-xs font-medium uppercase tracking-widest text-[var(--color-muted)]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-muted)]">
           Architecture Canvas
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Map systems together</h1>
-        <p className="mt-3 text-sm text-[var(--color-muted)]">
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight">Map systems together</h1>
+        <p className="mt-3 text-sm leading-relaxed text-[var(--color-muted)]">
           Design architecture diagrams with live collaboration — minimal, fast, and shareable.
         </p>
         {displayName ? (

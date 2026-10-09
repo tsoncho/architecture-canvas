@@ -79,26 +79,44 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
 
   const { screenToFlowPosition, fitView, getViewport } = useReactFlow()
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const fittedForRef = useRef<string>('')
+  const didInitialFit = useRef(false)
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(initialContextMenu)
   const [pendingType, setPendingType] = useState<NodeType>(defaultNodeType)
   // Positions while dragging only — membership always comes from the project store.
   const [dragPositions, setDragPositions] = useState<Record<string, XYPosition>>({})
 
   const nodeIdsKey = useMemo(() => nodes.map((n) => n.id).sort().join(','), [nodes])
+  const presence = useProjectStore((s) => s.presence)
+  const remoteSelection = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const user of presence) {
+      if (user.userId === userId) continue
+      for (const id of user.selectedIds ?? []) {
+        if (!map.has(id)) map.set(id, user.color)
+      }
+    }
+    return map
+  }, [presence, userId])
 
   const flowNodes = useMemo(
     () =>
       nodes.map((n) => {
         const base = toFlowNode(n)
         const drag = dragPositions[n.id]
+        const remoteColor = remoteSelection.get(n.id)
         return {
           ...base,
           position: drag ?? base.position,
           selected: selectedIds.includes(n.id),
+          style: {
+            ...base.style,
+            ...(remoteColor && !selectedIds.includes(n.id)
+              ? { boxShadow: `0 0 0 2px ${remoteColor}` }
+              : {}),
+          },
         }
       }),
-    [nodes, dragPositions, selectedIds],
+    [nodes, dragPositions, selectedIds, remoteSelection],
   )
   const flowEdges = useMemo(() => edges.map(toFlowEdge), [edges])
 
@@ -115,6 +133,24 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       return changed ? next : prev
     })
   }, [nodeIdsKey, nodes])
+
+  useEffect(() => {
+    void syncEngine.trackSelection(selectedIds)
+  }, [selectedIds])
+
+  const runSyncedUndo = useCallback(() => {
+    const beforeNodes = useProjectStore.getState().nodes.map((n) => n.id)
+    const beforeEdges = useProjectStore.getState().edges.map((e) => e.id)
+    undo()
+    void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+  }, [undo])
+
+  const runSyncedRedo = useCallback(() => {
+    const beforeNodes = useProjectStore.getState().nodes.map((n) => n.id)
+    const beforeEdges = useProjectStore.getState().edges.map((e) => e.id)
+    redo()
+    void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+  }, [redo])
 
   const onNodesChange = useCallback((changes: NodeChange<Node<ArchitectureFlowData>>[]) => {
     // Never apply remove/add/replace here — that was desyncing the canvas from Spec/store.
@@ -329,14 +365,14 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       }
       if (event.ctrlKey && event.key === 'z' && !event.shiftKey) {
         event.preventDefault()
-        undo()
+        runSyncedUndo()
       }
       if (
         (event.ctrlKey && event.key === 'z' && event.shiftKey) ||
         (event.ctrlKey && event.key === 'y')
       ) {
         event.preventDefault()
-        redo()
+        runSyncedRedo()
       }
       if (event.ctrlKey && event.key === 'c') {
         event.preventDefault()
@@ -367,8 +403,8 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   }, [
     nodes,
     edges,
-    undo,
-    redo,
+    runSyncedUndo,
+    runSyncedRedo,
     spawnNode,
     screenToFlowPosition,
     pendingType,
@@ -388,13 +424,13 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     setZoom(vp.zoom)
   }, [getViewport, setZoom])
 
-  // Fit whenever the set of node ids changes (open / import / first place).
+  // Fit once when the project first has nodes — not on every peer/add change.
   useEffect(() => {
-    if (!nodeIdsKey || fittedForRef.current === nodeIdsKey) return
-    fittedForRef.current = nodeIdsKey
+    if (didInitialFit.current || nodes.length === 0) return
+    didInitialFit.current = true
     const timer = window.setTimeout(() => fitView({ padding: 0.2 }), 30)
     return () => clearTimeout(timer)
-  }, [nodeIdsKey, fitView])
+  }, [nodes.length, fitView])
 
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {

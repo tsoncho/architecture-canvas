@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import type { ProjectMember } from '@/types'
 
 const MAX_MEMBERS = 3
 
@@ -16,22 +17,28 @@ type ShareDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   joinCode: string
-  memberCount: number
+  members: ProjectMember[]
+  currentUserId: string
 }
 
-export function ShareDialog({ open, onOpenChange, joinCode, memberCount }: ShareDialogProps) {
-  const [copied, setCopied] = useState<'code' | 'link' | null>(null)
-  const joinLink = `architecturecanvas://join/${joinCode}`
+export function ShareDialog({
+  open,
+  onOpenChange,
+  joinCode,
+  members,
+  currentUserId,
+}: ShareDialogProps) {
+  const [copied, setCopied] = useState(false)
   const fullMessage = `Join my Architecture Canvas project with code ${joinCode}`
-  const isFull = memberCount >= MAX_MEMBERS
+  const isFull = members.length >= MAX_MEMBERS
 
-  const copyText = async (value: string, kind: 'code' | 'link') => {
+  const copyText = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value)
-      setCopied(kind)
-      setTimeout(() => setCopied(null), 2000)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     } catch {
-      setCopied(null)
+      setCopied(false)
     }
   }
 
@@ -44,35 +51,49 @@ export function ShareDialog({ open, onOpenChange, joinCode, memberCount }: Share
             Teammates enter this code on the join screen. Up to {MAX_MEMBERS} people per project.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <label className="text-xs font-medium text-[var(--color-muted)]">Project code</label>
-          <div className="flex gap-2">
-            <Input readOnly value={joinCode} className="font-mono tracking-wider" />
-            <Button type="button" variant="outline" onClick={() => void copyText(joinCode, 'code')}>
-              {copied === 'code' ? 'Copied' : 'Copy code'}
-            </Button>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-[var(--color-muted)]">Project code</label>
+            <div className="flex gap-2">
+              <Input readOnly value={joinCode} className="font-mono tracking-wider" />
+              <Button type="button" variant="outline" onClick={() => void copyText(joinCode)}>
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Input readOnly value={joinLink} className="font-mono text-xs" />
-            <Button type="button" variant="outline" onClick={() => void copyText(joinLink, 'link')}>
-              {copied === 'link' ? 'Copied' : 'Copy link'}
-            </Button>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-[var(--color-muted)]">
+              People ({members.length}/{MAX_MEMBERS})
+            </p>
+            <ul className="space-y-1.5">
+              {members.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[var(--color-border)] px-3 py-2 text-sm dark:border-[var(--color-border-dark)]"
+                >
+                  <span className="truncate font-medium">
+                    {m.displayName || 'Guest'}
+                    {m.userId === currentUserId ? (
+                      <span className="ml-1.5 text-xs font-normal text-[var(--color-muted)]">
+                        you
+                      </span>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {isFull ? (
+              <p className="text-sm text-amber-700 dark:text-amber-300">Project is currently full.</p>
+            ) : (
+              <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2 text-sm dark:border-[var(--color-border-dark)] dark:bg-[var(--color-canvas-dark)]">
+                {fullMessage}
+              </p>
+            )}
           </div>
-          <p className="text-sm text-[var(--color-muted)]">
-            {memberCount} / {MAX_MEMBERS} people
-          </p>
-          {isFull ? (
-            <p className="text-sm text-amber-700 dark:text-amber-300">
-              Project is currently full.
-            </p>
-          ) : (
-            <p className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-canvas)] px-3 py-2 text-sm dark:border-[var(--color-border-dark)] dark:bg-[var(--color-canvas-dark)]">
-              {fullMessage}
-            </p>
-          )}
         </div>
         <DialogFooter>
-          <Button type="button" variant="secondary" onClick={() => void copyText(fullMessage, 'code')}>
+          <Button type="button" variant="secondary" onClick={() => void copyText(fullMessage)}>
             Copy invite message
           </Button>
         </DialogFooter>

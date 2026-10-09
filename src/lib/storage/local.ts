@@ -110,6 +110,13 @@ export async function upsertRecentProject(project: RecentProject): Promise<void>
   recordRecentProject(project)
 }
 
+export async function removeRecentProjectLocal(projectId: string): Promise<void> {
+  const db = await getDb()
+  await db.delete('recentProjects', projectId)
+  const { removeRecentProject } = await import('@/stores/identity-store')
+  removeRecentProject(projectId)
+}
+
 /** Copy IndexedDB recents into localStorage so older installs show them on Welcome/Home. */
 export async function syncRecentProjectsToLocalStorage(): Promise<RecentProject[]> {
   const items = await getRecentProjects()

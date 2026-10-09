@@ -8,15 +8,30 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ADDABLE_NODE_TYPES, NODE_CATALOG } from '@/lib/node-types'
 import { dispatchFitView, dispatchNodeType } from '@/components/canvas/ArchitectureCanvas'
+import { syncEngine } from '@/features/collaboration/sync'
 import { useProjectStore } from '@/stores/project-store'
 import { useUiStore } from '@/stores/ui-store'
 import type { NodeType } from '@/types'
 
+function syncedUndo() {
+  const state = useProjectStore.getState()
+  const beforeNodes = state.nodes.map((n) => n.id)
+  const beforeEdges = state.edges.map((e) => e.id)
+  state.undo()
+  void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+}
+
+function syncedRedo() {
+  const state = useProjectStore.getState()
+  const beforeNodes = state.nodes.map((n) => n.id)
+  const beforeEdges = state.edges.map((e) => e.id)
+  state.redo()
+  void syncEngine.syncUndoSnapshot(beforeNodes, beforeEdges)
+}
+
 export function EditorToolbar() {
   const canUndo = useProjectStore((s) => s.canUndo)
   const canRedo = useProjectStore((s) => s.canRedo)
-  const undo = useProjectStore((s) => s.undo)
-  const redo = useProjectStore((s) => s.redo)
   const zoom = useUiStore((s) => s.zoom)
   const addMenuOpen = useUiStore((s) => s.addMenuOpen)
   const setAddMenuOpen = useUiStore((s) => s.setAddMenuOpen)
@@ -28,7 +43,7 @@ export function EditorToolbar() {
   }
 
   return (
-    <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-sm dark:border-[var(--color-border-dark)] dark:bg-[var(--color-surface-dark)]">
+    <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 dark:border-[var(--color-border-dark)] dark:bg-[var(--color-surface-dark)]">
       <DropdownMenu open={addMenuOpen} onOpenChange={setAddMenuOpen}>
         <DropdownMenuTrigger asChild>
           <Button type="button" size="sm" variant="ghost" className="pointer-events-auto h-8">
@@ -54,7 +69,7 @@ export function EditorToolbar() {
         variant="ghost"
         className="pointer-events-auto h-8"
         disabled={!canUndo}
-        onClick={() => undo()}
+        onClick={() => syncedUndo()}
       >
         <Undo2 className="h-4 w-4" />
       </Button>
@@ -64,7 +79,7 @@ export function EditorToolbar() {
         variant="ghost"
         className="pointer-events-auto h-8"
         disabled={!canRedo}
-        onClick={() => redo()}
+        onClick={() => syncedRedo()}
       >
         <Redo2 className="h-4 w-4" />
       </Button>

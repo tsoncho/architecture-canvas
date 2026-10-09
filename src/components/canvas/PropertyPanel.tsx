@@ -28,6 +28,7 @@ export function PropertyPanel() {
 
   const [name, setName] = useState('')
   const [technology, setTechnology] = useState('')
+  const [description, setDescription] = useState('')
   const [color, setColor] = useState('#3b82f6')
   const [label, setLabel] = useState('')
   const colorUndoArmed = useRef(false)
@@ -37,6 +38,7 @@ export function PropertyPanel() {
     if (node) {
       setName(node.name)
       setTechnology(node.technology)
+      setDescription(node.description)
       setColor(node.color)
       colorUndoArmed.current = false
     }
@@ -71,7 +73,12 @@ export function PropertyPanel() {
   const latestNode = () =>
     (node && useProjectStore.getState().nodes.find((n) => n.id === node.id)) || node
 
-  const persistNode = (patch: { name?: string; technology?: string; color?: string }) => {
+  const persistNode = (patch: {
+    name?: string
+    technology?: string
+    description?: string
+    color?: string
+  }) => {
     if (!node) return
     const current = latestNode()
     if (!current) return
@@ -157,6 +164,17 @@ export function PropertyPanel() {
                 value={technology}
                 onChange={(e) => setTechnology(e.target.value)}
                 onBlur={() => persistNode({ technology })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="node-desc">Description</Label>
+              <textarea
+                id="node-desc"
+                value={description}
+                rows={3}
+                className="flex w-full rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] dark:border-[var(--color-border-dark)]"
+                onChange={(e) => setDescription(e.target.value)}
+                onBlur={() => persistNode({ description })}
               />
             </div>
             <div className="space-y-2">

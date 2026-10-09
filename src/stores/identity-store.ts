@@ -38,6 +38,13 @@ export function recordRecentProject(entry: RecentProject): void {
   writeJson(RECENT_KEY, list.slice(0, 12))
 }
 
+export function removeRecentProject(projectId: string): void {
+  writeJson(
+    RECENT_KEY,
+    getRecentProjects().filter((p) => p.id !== projectId),
+  )
+}
+
 type IdentityState = {
   identity: LocalIdentity | null
   settings: AppSettings

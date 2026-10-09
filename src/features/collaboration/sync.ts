@@ -75,6 +75,8 @@ function edgeToPayload(edge: ArchitectureEdge): Record<string, unknown> {
 
 export class SyncEngine {
   private projectId: string | null = null
+  private userId: string | null = null
+  private displayName: string = 'Guest'
   private channels: RealtimeChannel[] = []
   private presenceChannel: RealtimeChannel | null = null
   private positionTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -83,6 +85,8 @@ export class SyncEngine {
   async start(projectId: string, userId: string, displayName: string): Promise<void> {
     await this.stop()
     this.projectId = projectId
+    this.userId = userId
+    this.displayName = displayName
     await this.persistLocalSnapshot()
     this.subscribeRealtime(projectId)
     await this.startPresence(projectId, userId, displayName)
@@ -110,6 +114,7 @@ export class SyncEngine {
     }
     this.positionTimers.clear()
     this.projectId = null
+    this.userId = null
   }
 
   private handleOnline = (): void => {
@@ -215,6 +220,7 @@ export class SyncEngine {
           userId: string
           displayName: string
           color: string
+          selectedIds?: string[]
         }>()
         const users: PresenceUser[] = []
         for (const key of Object.keys(state)) {
@@ -226,6 +232,7 @@ export class SyncEngine {
             userId: meta.userId ?? key,
             displayName: meta.displayName ?? 'Guest',
             color: meta.color ?? presenceColor(key),
+            selectedIds: Array.isArray(meta.selectedIds) ? meta.selectedIds : [],
           })
         }
         useProjectStore.getState().setPresence(users)
@@ -236,11 +243,45 @@ export class SyncEngine {
             userId,
             displayName,
             color: presenceColor(userId),
+            selectedIds: useUiStore.getState().selectedIds,
           })
         }
       })
 
     this.presenceChannel = channel
+  }
+
+  async trackSelection(selectedIds: string[]): Promise<void> {
+    if (!this.presenceChannel || !this.userId) return
+    try {
+      await this.presenceChannel.track({
+        userId: this.userId,
+        displayName: this.displayName,
+        color: presenceColor(this.userId),
+        selectedIds,
+      })
+    } catch {
+      // Presence is best-effort.
+    }
+  }
+
+  /** After local undo/redo, push the restored graph so peers stay aligned. */
+  async syncUndoSnapshot(
+    beforeNodeIds: string[],
+    beforeEdgeIds: string[],
+  ): Promise<void> {
+    if (!this.projectId) return
+    const { nodes, edges } = useProjectStore.getState()
+    const nodeIds = new Set(nodes.map((n) => n.id))
+    const edgeIds = new Set(edges.map((e) => e.id))
+    for (const id of beforeNodeIds) {
+      if (!nodeIds.has(id)) await this.deleteNode(id)
+    }
+    for (const id of beforeEdgeIds) {
+      if (!edgeIds.has(id)) await this.deleteEdge(id)
+    }
+    for (const node of nodes) await this.upsertNode(node)
+    for (const edge of edges) await this.upsertEdge(edge)
   }
 
   async persistLocalSnapshot(): Promise<void> {

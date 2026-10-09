@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArchitectureCanvas } from '@/components/canvas/ArchitectureCanvas'
 import { PropertyPanel } from '@/components/canvas/PropertyPanel'
+import { AboutDialog } from '@/components/dialogs/AboutDialog'
 import { ShareDialog } from '@/components/dialogs/ShareDialog'
 import { SpecDialog } from '@/components/dialogs/SpecDialog'
 import { SettingsDialog } from '@/components/dialogs/SettingsDialog'
@@ -42,6 +43,7 @@ export function EditorPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   const displayName = settings.displayName || ensureIdentity().displayName
 
@@ -161,10 +163,9 @@ export function EditorPage() {
     <div className="flex h-full flex-col">
       <TopBar
         currentUserId={userId}
+        canvasHostRef={canvasRef}
         onOpenQuickGuide={() => setOnboardingOpen(true)}
-        onOpenAbout={() => {
-          window.alert('Architecture Canvas — collaborative system diagrams.')
-        }}
+        onOpenAbout={() => setAboutOpen(true)}
       />
       <div className="relative flex min-h-0 flex-1">
         <div ref={canvasRef} className="relative min-w-0 flex-1">
@@ -177,7 +178,8 @@ export function EditorPage() {
         open={shareOpen}
         onOpenChange={setShareOpen}
         joinCode={project.joinCode}
-        memberCount={members.length}
+        members={members}
+        currentUserId={userId}
       />
       <SpecDialog open={specOpen} onOpenChange={setSpecOpen} userId={userId} />
       <SettingsDialog
@@ -185,6 +187,7 @@ export function EditorPage() {
         onOpenChange={setSettingsOpen}
         onAppearanceChange={(appearance) => applyAppearanceClass({ ...settings, appearance })}
       />
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       <QuickGuide
         open={onboardingOpen}
         onOpenChange={setOnboardingOpen}
