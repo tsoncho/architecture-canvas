@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { SaveStatus } from '@/types'
 
+type SelectionPatch = {
+  selectedIds: string[]
+  editingNodeId?: string | null
+  editingEdgeId?: string | null
+}
+
 type UiState = {
   selectedIds: string[]
   editingNodeId: string | null
@@ -16,6 +22,8 @@ type UiState = {
   connectMode: boolean
   addMenuOpen: boolean
   setSelectedIds: (ids: string[]) => void
+  /** One atomic write so outline + property panel never tear across frames. */
+  applySelection: (patch: SelectionPatch) => void
   setEditingNodeId: (id: string | null) => void
   setEditingEdgeId: (id: string | null) => void
   setShareOpen: (open: boolean) => void
@@ -46,6 +54,14 @@ export const useUiStore = create<UiState>((set) => ({
   connectMode: false,
   addMenuOpen: false,
   setSelectedIds: (ids) => set({ selectedIds: ids }),
+  applySelection: ({ selectedIds, editingNodeId, editingEdgeId }) =>
+    set((state) => ({
+      selectedIds,
+      editingNodeId:
+        editingNodeId !== undefined ? editingNodeId : state.editingNodeId,
+      editingEdgeId:
+        editingEdgeId !== undefined ? editingEdgeId : state.editingEdgeId,
+    })),
   setEditingNodeId: (id) => set({ editingNodeId: id, editingEdgeId: null }),
   setEditingEdgeId: (id) => set({ editingEdgeId: id, editingNodeId: null }),
   setShareOpen: (open) => set({ shareOpen: open }),

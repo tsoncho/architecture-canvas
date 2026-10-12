@@ -13,6 +13,7 @@ import {
 import type { NodeType } from '@/types'
 import type { ArchitectureFlowData } from '@/lib/flow-mappers'
 import { NodeHandles } from '@/components/nodes/NodeHandles'
+import { useUiStore } from '@/stores/ui-store'
 import { cn } from '@/lib/utils'
 
 const ICONS: Record<Exclude<NodeType, 'group' | 'text'>, typeof AppWindow> = {
@@ -32,12 +33,14 @@ function NodeIcon({ type }: { type: NodeType }) {
   return <Icon className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
 }
 
-export function ArchitectureNode({ data, selected }: NodeProps<Node<ArchitectureFlowData>>) {
+export function ArchitectureNode({ id, data }: NodeProps<Node<ArchitectureFlowData>>) {
   const node = data.architectureNode
+  // Subscribe directly — don't wait for React Flow to push a `selected` prop.
+  const selected = useUiStore((s) => s.selectedIds.includes(id))
   return (
     <div
       className={cn(
-        'group/node flex h-full min-h-[72px] min-w-[160px] flex-col overflow-visible rounded-md border bg-[var(--color-surface)] text-sm shadow-none',
+        'group/node flex h-full min-h-[72px] min-w-[160px] flex-col overflow-visible rounded-md border bg-[var(--color-surface)] text-sm shadow-none transition-none',
         selected
           ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]'
           : 'border-[var(--color-border)]',

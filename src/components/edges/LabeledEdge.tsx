@@ -7,6 +7,7 @@ import {
   type EdgeProps,
 } from '@xyflow/react'
 import type { ArchitectureEdgeData } from '@/lib/flow-mappers'
+import { useUiStore } from '@/stores/ui-store'
 
 function toPosition(value: Position | string | undefined): Position {
   if (value === Position.Top || value === 'top') return Position.Top
@@ -25,10 +26,10 @@ export function LabeledEdge({
   sourcePosition,
   targetPosition,
   label,
-  selected,
   markerEnd,
   data,
 }: EdgeProps<Edge<ArchitectureEdgeData>>) {
+  const selected = useUiStore((s) => s.selectedIds.includes(id))
   const offset =
     typeof data?.pathOffset === 'number' && Number.isFinite(data.pathOffset)
       ? data.pathOffset

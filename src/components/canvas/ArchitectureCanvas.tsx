@@ -77,11 +77,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   const redo = useProjectStore((s) => s.redo)
 
   const selectedIds = useUiStore((s) => s.selectedIds)
-  const editingNodeId = useUiStore((s) => s.editingNodeId)
-  const editingEdgeId = useUiStore((s) => s.editingEdgeId)
-  const setSelectedIds = useUiStore((s) => s.setSelectedIds)
-  const setEditingNodeId = useUiStore((s) => s.setEditingNodeId)
-  const setEditingEdgeId = useUiStore((s) => s.setEditingEdgeId)
+  const applySelection = useUiStore((s) => s.applySelection)
   const clearSelection = useUiStore((s) => s.clearSelection)
   const setZoom = useUiStore((s) => s.setZoom)
   const showGrid = useIdentityStore((s) => s.settings.showGrid)
@@ -113,9 +109,8 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         const base = toFlowNode(n)
         const drag = dragPositions[n.id]
         const remoteColor = remoteSelection.get(n.id)
-        // Outline follows selection OR the node open in the property panel.
-        const isSelected =
-          selectedIds.includes(n.id) || editingNodeId === n.id
+        // Outline is store-driven in node components; `selected` here keeps RF in sync.
+        const isSelected = selectedIds.includes(n.id)
         return {
           ...base,
           position: drag ?? base.position,
@@ -128,7 +123,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
           },
         }
       }),
-    [nodes, dragPositions, selectedIds, editingNodeId, remoteSelection],
+    [nodes, dragPositions, selectedIds, remoteSelection],
   )
   const flowEdges = useMemo(
     () =>
@@ -136,10 +131,10 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         const flow = toFlowEdge(edge, nodes, edges)
         return {
           ...flow,
-          selected: selectedIds.includes(edge.id) || editingEdgeId === edge.id,
+          selected: selectedIds.includes(edge.id),
         }
       }),
-    [edges, nodes, selectedIds, editingEdgeId],
+    [edges, nodes, selectedIds],
   )
 
   // Drop stale drag overlays when the store node set changes (import / undo / delete).
@@ -181,6 +176,34 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   }, [redo])
 
   const onNodesChange = useCallback((changes: NodeChange<Node<ArchitectureFlowData>>[]) => {
+    // Apply select changes to the store immediately (earliest RF signal on click).
+    const selectChanges = changes.filter(
+      (c): c is NodeChange<Node<ArchitectureFlowData>> & { type: 'select' } =>
+        c.type === 'select',
+    )
+    if (selectChanges.length > 0) {
+      const nodeIds = new Set(useProjectStore.getState().nodes.map((n) => n.id))
+      const next = new Set(useUiStore.getState().selectedIds)
+      for (const change of selectChanges) {
+        if (change.selected) next.add(change.id)
+        else next.delete(change.id)
+      }
+      const ids = [...next]
+      const selectedNodes = ids.filter((id) => nodeIds.has(id))
+      const selectedEdges = ids.filter((id) => !nodeIds.has(id))
+      applySelection({
+        selectedIds: ids,
+        editingNodeId:
+          selectedNodes.length === 1 && selectedEdges.length === 0
+            ? selectedNodes[0]!
+            : null,
+        editingEdgeId:
+          selectedEdges.length === 1 && selectedNodes.length === 0
+            ? selectedEdges[0]!
+            : null,
+      })
+    }
+
     // Never apply remove/add/replace here — that was desyncing the canvas from Spec/store.
     setDragPositions((prev) => {
       let next: Record<string, XYPosition> | null = null
@@ -218,7 +241,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       syncEngine.setDraggingIds([...mergedDragging])
       return next ?? prev
     })
-  }, [resizeNode])
+  }, [applySelection, resizeNode])
 
   const spawnNode = useCallback(
     (type: NodeType, position: { x: number; y: number }) => {
@@ -232,10 +255,13 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       })
       addNode(node)
       void syncEngine.insertNode(node)
-      setEditingNodeId(node.id)
-      setSelectedIds([node.id])
+      applySelection({
+        selectedIds: [node.id],
+        editingNodeId: node.id,
+        editingEdgeId: null,
+      })
     },
-    [project, userId, addNode, setEditingNodeId, setSelectedIds],
+    [project, userId, addNode, applySelection],
   )
 
   const onConnect = useCallback(
@@ -340,47 +366,59 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
 
   const onSelectionChange = useCallback(
     ({ nodes: selNodes, edges: selEdges }: OnSelectionChangeParams) => {
+      // Empty selection is cleared via pane click / Escape — don't flicker-clear
+      // mid-gesture when RF momentarily reports nothing.
+      if (selNodes.length === 0 && selEdges.length === 0) return
       const ids = [...selNodes.map((n) => n.id), ...selEdges.map((e) => e.id)]
-      setSelectedIds(ids)
-      // Property panel only for a single node/edge selection.
-      if (selNodes.length === 1 && selEdges.length === 0) {
-        setEditingNodeId(selNodes[0]!.id)
-      } else if (selEdges.length === 1 && selNodes.length === 0) {
-        setEditingEdgeId(selEdges[0]!.id)
-      } else if (selNodes.length === 0 && selEdges.length === 0) {
-        // pane clear handled separately; keep editing until pane click if needed
-      } else {
-        setEditingNodeId(null)
-        setEditingEdgeId(null)
-      }
+      applySelection({
+        selectedIds: ids,
+        editingNodeId:
+          selNodes.length === 1 && selEdges.length === 0 ? selNodes[0]!.id : null,
+        editingEdgeId:
+          selEdges.length === 1 && selNodes.length === 0 ? selEdges[0]!.id : null,
+      })
     },
-    [setSelectedIds, setEditingNodeId, setEditingEdgeId],
+    [applySelection],
   )
 
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node<ArchitectureFlowData>) => {
       // Let React Flow own multi-select (Shift-click). Don't collapse the selection.
       if (event.shiftKey || event.metaKey || event.ctrlKey) {
-        setEditingNodeId(null)
+        applySelection({
+          selectedIds: useUiStore.getState().selectedIds,
+          editingNodeId: null,
+          editingEdgeId: null,
+        })
         return
       }
-      // Keep outline + property panel in lockstep (don't wait on onSelectionChange).
-      setSelectedIds([node.id])
-      setEditingNodeId(node.id)
+      // Atomic write — outline switches on this click, same frame.
+      applySelection({
+        selectedIds: [node.id],
+        editingNodeId: node.id,
+        editingEdgeId: null,
+      })
     },
-    [setSelectedIds, setEditingNodeId],
+    [applySelection],
   )
 
   const onEdgeClick = useCallback(
     (event: React.MouseEvent, edge: Edge) => {
       if (event.shiftKey || event.metaKey || event.ctrlKey) {
-        setEditingEdgeId(null)
+        applySelection({
+          selectedIds: useUiStore.getState().selectedIds,
+          editingNodeId: null,
+          editingEdgeId: null,
+        })
         return
       }
-      setSelectedIds([edge.id])
-      setEditingEdgeId(edge.id)
+      applySelection({
+        selectedIds: [edge.id],
+        editingNodeId: null,
+        editingEdgeId: edge.id,
+      })
     },
-    [setSelectedIds, setEditingEdgeId],
+    [applySelection],
   )
 
   const onPaneDoubleClick = useCallback(
@@ -442,9 +480,14 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     })
     for (const n of createdNodes) void syncEngine.insertNode(n)
     for (const e of createdEdges) void syncEngine.insertEdge(e)
-    setSelectedIds(createdNodes.map((n) => n.id))
+    const pastedIds = createdNodes.map((n) => n.id)
+    applySelection({
+      selectedIds: pastedIds,
+      editingNodeId: pastedIds.length === 1 ? pastedIds[0]! : null,
+      editingEdgeId: null,
+    })
     toast(`Pasted ${createdNodes.length} item${createdNodes.length === 1 ? '' : 's'}`)
-  }, [project, userId, addNode, addEdge, withHistory, setSelectedIds])
+  }, [project, userId, addNode, addEdge, withHistory, applySelection])
 
   const duplicateSelection = useCallback(() => {
     copySelection()
@@ -487,8 +530,6 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
           for (const id of nodeIds) void syncEngine.deleteNode(id)
           for (const id of edgeIds) void syncEngine.deleteEdge(id)
           clearSelection()
-          setEditingNodeId(null)
-          setEditingEdgeId(null)
         }
       }
       const mod = event.ctrlKey || event.metaKey
@@ -514,12 +555,14 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
       }
       if (mod && event.key === 'a') {
         event.preventDefault()
-        setSelectedIds([...nodes.map((n) => n.id), ...edges.map((e) => e.id)])
+        applySelection({
+          selectedIds: [...nodes.map((n) => n.id), ...edges.map((e) => e.id)],
+          editingNodeId: null,
+          editingEdgeId: null,
+        })
       }
       if (event.key === 'Escape') {
         clearSelection()
-        setEditingNodeId(null)
-        setEditingEdgeId(null)
         setContextMenu(initialContextMenu)
       }
       // Fit when nodes exist but may be off-screen
@@ -544,9 +587,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
     copySelection,
     pasteClipboard,
     duplicateSelection,
-    setSelectedIds,
-    setEditingNodeId,
-    setEditingEdgeId,
+    applySelection,
     fitView,
   ])
 
@@ -572,10 +613,13 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         y: event.clientY,
         nodeId: node.id,
       })
-      setSelectedIds([node.id])
-      setEditingNodeId(node.id)
+      applySelection({
+        selectedIds: [node.id],
+        editingNodeId: node.id,
+        editingEdgeId: null,
+      })
     },
-    [setSelectedIds, setEditingNodeId],
+    [applySelection],
   )
 
   const onEdgeContextMenu = useCallback(
@@ -587,10 +631,13 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         y: event.clientY,
         edgeId: edge.id,
       })
-      setSelectedIds([edge.id])
-      setEditingEdgeId(edge.id)
+      applySelection({
+        selectedIds: [edge.id],
+        editingNodeId: null,
+        editingEdgeId: edge.id,
+      })
     },
-    [setSelectedIds, setEditingEdgeId],
+    [applySelection],
   )
 
   return (
@@ -619,8 +666,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         onSelectionChange={onSelectionChange}
         onPaneClick={() => {
           setContextMenu(initialContextMenu)
-          setEditingNodeId(null)
-          setEditingEdgeId(null)
+          clearSelection()
         }}
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
@@ -660,13 +706,29 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         menu={contextMenu}
         onClose={() => setContextMenu(initialContextMenu)}
         onEdit={() => {
-          if (contextMenu.nodeId) setEditingNodeId(contextMenu.nodeId)
-          if (contextMenu.edgeId) setEditingEdgeId(contextMenu.edgeId)
+          if (contextMenu.nodeId) {
+            applySelection({
+              selectedIds: [contextMenu.nodeId],
+              editingNodeId: contextMenu.nodeId,
+              editingEdgeId: null,
+            })
+          }
+          if (contextMenu.edgeId) {
+            applySelection({
+              selectedIds: [contextMenu.edgeId],
+              editingNodeId: null,
+              editingEdgeId: contextMenu.edgeId,
+            })
+          }
         }}
         onDuplicate={
           contextMenu.nodeId
             ? () => {
-                setSelectedIds([contextMenu.nodeId!])
+                applySelection({
+                  selectedIds: [contextMenu.nodeId!],
+                  editingNodeId: contextMenu.nodeId!,
+                  editingEdgeId: null,
+                })
                 window.setTimeout(() => duplicateSelection(), 0)
               }
             : undefined
@@ -675,12 +737,12 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
           if (contextMenu.nodeId) {
             deleteNodes([contextMenu.nodeId], 'Delete node')
             void syncEngine.deleteNode(contextMenu.nodeId)
-            setEditingNodeId(null)
+            clearSelection()
           }
           if (contextMenu.edgeId) {
             deleteEdges([contextMenu.edgeId], 'Delete connection')
             void syncEngine.deleteEdge(contextMenu.edgeId)
-            setEditingEdgeId(null)
+            clearSelection()
           }
         }}
       />

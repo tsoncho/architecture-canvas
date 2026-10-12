@@ -1,9 +1,11 @@
 import { NodeResizer, type Node, type NodeProps } from '@xyflow/react'
 import type { ArchitectureFlowData } from '@/lib/flow-mappers'
+import { useUiStore } from '@/stores/ui-store'
 import { cn } from '@/lib/utils'
 
-export function TextNode({ data, selected }: NodeProps<Node<ArchitectureFlowData>>) {
+export function TextNode({ id, data }: NodeProps<Node<ArchitectureFlowData>>) {
   const node = data.architectureNode
+  const selected = useUiStore((s) => s.selectedIds.includes(id))
   return (
     <div
       className={cn(

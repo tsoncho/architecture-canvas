@@ -1,10 +1,12 @@
 import { NodeResizer, type Node, type NodeProps } from '@xyflow/react'
 import type { ArchitectureFlowData } from '@/lib/flow-mappers'
 import { NodeHandles } from '@/components/nodes/NodeHandles'
+import { useUiStore } from '@/stores/ui-store'
 import { cn } from '@/lib/utils'
 
-export function GroupNode({ data, selected }: NodeProps<Node<ArchitectureFlowData>>) {
+export function GroupNode({ id, data }: NodeProps<Node<ArchitectureFlowData>>) {
   const node = data.architectureNode
+  const selected = useUiStore((s) => s.selectedIds.includes(id))
   return (
     <div
       className={cn(
