@@ -77,6 +77,8 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
   const redo = useProjectStore((s) => s.redo)
 
   const selectedIds = useUiStore((s) => s.selectedIds)
+  const editingNodeId = useUiStore((s) => s.editingNodeId)
+  const editingEdgeId = useUiStore((s) => s.editingEdgeId)
   const setSelectedIds = useUiStore((s) => s.setSelectedIds)
   const setEditingNodeId = useUiStore((s) => s.setEditingNodeId)
   const setEditingEdgeId = useUiStore((s) => s.setEditingEdgeId)
@@ -111,23 +113,33 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         const base = toFlowNode(n)
         const drag = dragPositions[n.id]
         const remoteColor = remoteSelection.get(n.id)
+        // Outline follows selection OR the node open in the property panel.
+        const isSelected =
+          selectedIds.includes(n.id) || editingNodeId === n.id
         return {
           ...base,
           position: drag ?? base.position,
-          selected: selectedIds.includes(n.id),
+          selected: isSelected,
           style: {
             ...base.style,
-            ...(remoteColor && !selectedIds.includes(n.id)
+            ...(remoteColor && !isSelected
               ? { boxShadow: `0 0 0 2px ${remoteColor}` }
               : {}),
           },
         }
       }),
-    [nodes, dragPositions, selectedIds, remoteSelection],
+    [nodes, dragPositions, selectedIds, editingNodeId, remoteSelection],
   )
   const flowEdges = useMemo(
-    () => edges.map((edge) => toFlowEdge(edge, nodes, edges)),
-    [edges, nodes],
+    () =>
+      edges.map((edge) => {
+        const flow = toFlowEdge(edge, nodes, edges)
+        return {
+          ...flow,
+          selected: selectedIds.includes(edge.id) || editingEdgeId === edge.id,
+        }
+      }),
+    [edges, nodes, selectedIds, editingEdgeId],
   )
 
   // Drop stale drag overlays when the store node set changes (import / undo / delete).
@@ -352,9 +364,23 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         setEditingNodeId(null)
         return
       }
+      // Keep outline + property panel in lockstep (don't wait on onSelectionChange).
+      setSelectedIds([node.id])
       setEditingNodeId(node.id)
     },
-    [setEditingNodeId],
+    [setSelectedIds, setEditingNodeId],
+  )
+
+  const onEdgeClick = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      if (event.shiftKey || event.metaKey || event.ctrlKey) {
+        setEditingEdgeId(null)
+        return
+      }
+      setSelectedIds([edge.id])
+      setEditingEdgeId(edge.id)
+    },
+    [setSelectedIds, setEditingEdgeId],
   )
 
   const onPaneDoubleClick = useCallback(
@@ -589,6 +615,7 @@ function CanvasInner({ userId, defaultNodeType = 'application' }: ArchitectureCa
         isValidConnection={isValidConnection}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
         onSelectionChange={onSelectionChange}
         onPaneClick={() => {
           setContextMenu(initialContextMenu)

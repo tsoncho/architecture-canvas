@@ -39,7 +39,7 @@ export function ArchitectureNode({ data, selected }: NodeProps<Node<Architecture
       className={cn(
         'group/node flex h-full min-h-[72px] min-w-[160px] flex-col overflow-visible rounded-md border bg-[var(--color-surface)] text-sm shadow-none',
         selected
-          ? 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]'
+          ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]'
           : 'border-[var(--color-border)]',
       )}
     >

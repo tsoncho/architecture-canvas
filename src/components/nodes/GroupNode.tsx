@@ -9,7 +9,9 @@ export function GroupNode({ data, selected }: NodeProps<Node<ArchitectureFlowDat
     <div
       className={cn(
         'group/node relative h-full w-full rounded-lg border-2 border-dashed bg-transparent',
-        selected ? 'border-[var(--color-accent)]' : 'border-[var(--color-muted)]/50',
+        selected
+          ? 'border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/40'
+          : 'border-[var(--color-muted)]/50',
       )}
     >
       <NodeResizer

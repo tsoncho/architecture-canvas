@@ -42,3 +42,19 @@ button { font: inherit; color: inherit; }
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
 }
+
+/* Dark grab cursors — system white hands disappear on our light canvas. */
+.react-flow__pane {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23ffffff' stroke='%230f172a' stroke-width='1.6' stroke-linejoin='round' d='M8.5 11.5V7.2a1.2 1.2 0 0 1 2.4 0v3.3m0-2.2V5.8a1.2 1.2 0 0 1 2.4 0v4.7m0-2.8V6.5a1.2 1.2 0 0 1 2.4 0v4.8m0-1.6V8.2a1.2 1.2 0 0 1 2.4 0v5.4c0 2.9-1.9 5.4-4.7 6.1A5.4 5.4 0 0 1 6 15.3v-2.6a1.2 1.2 0 0 1 2.4 0v1.3'/%3E%3C/svg%3E") 8 4, grab;
+}
+.react-flow__pane.dragging,
+.react-flow__viewport.dragging {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23e2e8f0' stroke='%230f172a' stroke-width='1.6' stroke-linejoin='round' d='M9 11.2V8.6a1 1 0 0 1 2 0v1.8m0-1V7.8a1 1 0 0 1 2 0v2.6m0-1.2V8.2a1 1 0 0 1 2 0v3.1m0-.8V9a1 1 0 0 1 2 0v4.6c0 2.5-1.7 4.7-4.1 5.3A4.7 4.7 0 0 1 7 14.7v-2.2a1 1 0 0 1 2 0v.7'/%3E%3C/svg%3E") 8 4, grabbing;
+}
+.react-flow__node,
+.react-flow__edge {
+  cursor: pointer;
+}
+.react-flow__node.dragging {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23e2e8f0' stroke='%230f172a' stroke-width='1.6' stroke-linejoin='round' d='M9 11.2V8.6a1 1 0 0 1 2 0v1.8m0-1V7.8a1 1 0 0 1 2 0v2.6m0-1.2V8.2a1 1 0 0 1 2 0v3.1m0-.8V9a1 1 0 0 1 2 0v4.6c0 2.5-1.7 4.7-4.1 5.3A4.7 4.7 0 0 1 7 14.7v-2.2a1 1 0 0 1 2 0v.7'/%3E%3C/svg%3E") 8 4, grabbing;
+}

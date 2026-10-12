@@ -12,6 +12,31 @@
 ![Stack](https://img.shields.io/badge/Supabase-realtime-3ecf8e)
 ![Stack](https://img.shields.io/badge/XYFlow-canvas-8b5cf6)
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/editor-canvas.png" alt="Editor canvas with a Payment Platform architecture diagram" width="900" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/welcome.png" alt="Welcome screen" width="440" />
+  &nbsp;
+  <img src="docs/screenshots/create-project.png" alt="Create project with templates" width="440" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/spec-ai.png" alt="Architecture Spec Ask AI dialog" width="440" />
+  &nbsp;
+  <img src="docs/screenshots/share-project.png" alt="Share project with join code" width="440" />
+</p>
+
+| | |
+|:--|:--|
+| **Canvas** | Infinite diagram with live sync, presence, and Fit |
+| **Welcome / Create** | Resume recent projects or start from a template |
+| **Spec → AI** | Prompt any model, import JSON back onto the canvas |
+| **Share** | Short join code, up to 3 people per project |
+
 ## Why this exists
 
 Most architecture tools are either whiteboards (too freeform) or enterprise suites (too heavy). Architecture Canvas is intentionally small:
