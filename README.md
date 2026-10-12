@@ -15,27 +15,32 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/editor-canvas.png" alt="Editor canvas with a Payment Platform architecture diagram" width="900" />
+  <img src="docs/screenshots/editor-canvas.png" alt="Checkout Platform microservices diagram with Live sync and property panel" width="100%" />
+  <br />
+  <sub>Live canvas — microservices template, selected node, property panel</sub>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/welcome.png" alt="Welcome screen" width="440" />
+  <img src="docs/screenshots/spec-ai.png" alt="Architecture Spec Ask AI prompt builder" width="48%" />
   &nbsp;
-  <img src="docs/screenshots/create-project.png" alt="Create project with templates" width="440" />
+  <img src="docs/screenshots/spec-export.png" alt="Architecture Spec JSON export" width="48%" />
+  <br />
+  <sub>Spec ↔ AI — ask any model, then export/import the JSON</sub>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/spec-ai.png" alt="Architecture Spec Ask AI dialog" width="440" />
+  <img src="docs/screenshots/welcome.png" alt="Welcome screen with recent projects" width="48%" />
   &nbsp;
-  <img src="docs/screenshots/share-project.png" alt="Share project with join code" width="440" />
+  <img src="docs/screenshots/share-project.png" alt="Share dialog with join code" width="48%" />
+  <br />
+  <sub>Welcome / share — resume work, invite teammates with a short code</sub>
 </p>
 
-| | |
-|:--|:--|
-| **Canvas** | Infinite diagram with live sync, presence, and Fit |
-| **Welcome / Create** | Resume recent projects or start from a template |
-| **Spec → AI** | Prompt any model, import JSON back onto the canvas |
-| **Share** | Short join code, up to 3 people per project |
+<p align="center">
+  <img src="docs/screenshots/create-project.png" alt="Create project with Microservices template selected" width="70%" />
+  <br />
+  <sub>Create — name it and start from Blank, Web, Mobile, or Microservices</sub>
+</p>
 
 ## Why this exists
 
