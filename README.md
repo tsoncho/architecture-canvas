@@ -15,9 +15,9 @@
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/editor-canvas.png" alt="Checkout Platform microservices diagram with Live sync and property panel" width="100%" />
+  <img src="docs/screenshots/editor-canvas.png" alt="Checkout Platform: Merchant → Dashboard → Kong → Auth/User/Payment → Postgres, Redis, Stripe" width="100%" />
   <br />
-  <sub>Live canvas — microservices template, selected node, property panel</sub>
+  <sub>Live canvas — Checkout Platform microservices, selected Payment Service + properties</sub>
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
   &nbsp;
   <img src="docs/screenshots/spec-export.png" alt="Architecture Spec JSON export" width="48%" />
   <br />
-  <sub>Spec ↔ AI — ask any model, then export/import the JSON</sub>
+  <sub>Spec ↔ AI — paste product docs, copy the prompt, export/import JSON</sub>
 </p>
 
 <p align="center">
@@ -33,13 +33,13 @@
   &nbsp;
   <img src="docs/screenshots/share-project.png" alt="Share dialog with join code" width="48%" />
   <br />
-  <sub>Welcome / share — resume work, invite teammates with a short code</sub>
+  <sub>Welcome / share — resume work, invite with a short code (up to 3 people)</sub>
 </p>
 
 <p align="center">
   <img src="docs/screenshots/create-project.png" alt="Create project with Microservices template selected" width="70%" />
   <br />
-  <sub>Create — name it and start from Blank, Web, Mobile, or Microservices</sub>
+  <sub>Create — Blank, Simple web, Mobile, or Microservices (Merchant → Stripe)</sub>
 </p>
 
 ## Why this exists
