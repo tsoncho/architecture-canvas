@@ -1,8 +1,8 @@
 # Architecture Canvas
 
-**A tiny, collaborative architecture diagramming app for Windows** — open it, create a project, enter your name, start designing.
+**Design your software architecture together. Export a structured specification that your AI coding assistant can understand.**
 
-> Think “Figma for system architecture,” without the enterprise complexity.
+A lightweight Windows diagramming app for developers and small teams (up to three collaborators). Not a general whiteboard, enterprise modelling suite, or in-app AI chatbot.
 
 [![Release](https://img.shields.io/github/v/release/tsoncho/architecture-canvas?label=latest)](https://github.com/tsoncho/architecture-canvas/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -12,14 +12,23 @@
 ![Stack](https://img.shields.io/badge/Supabase-realtime-3ecf8e)
 ![Stack](https://img.shields.io/badge/XYFlow-canvas-8b5cf6)
 
+**Current release line:** v0.1.12+
+
+## Who it’s for
+
+- Individual developers and indie founders
+- People using Cursor, Claude, ChatGPT, or similar coding assistants
+- Small teams (max 3) sketching systems together
+- Consultants and students designing software architectures
+
 ## Why this exists
 
-Most architecture tools are either whiteboards (too freeform) or enterprise suites (too heavy). Architecture Canvas is intentionally small:
+Most architecture tools are either whiteboards (too freeform) or enterprise suites (too heavy). Architecture Canvas stays small:
 
 - Launch → create or join with a short code (`7K2-FQ9`)
 - Drop apps, APIs, databases, queues, users…
 - Connect them, collaborate live (up to 3 people)
-- Export / import an **Architecture Spec** JSON so AIs can generate or refine diagrams
+- Export / import an **Architecture Spec** JSON so external AIs can generate or refine diagrams
 
 ## Download (Windows)
 
@@ -45,8 +54,18 @@ Installed builds **auto-update** from GitHub Releases (signed updater).
 - Architecture-oriented node types + groups + text notes
 - Realtime collaboration + presence avatars
 - Local-first edits with offline queue → Supabase sync
-- Architecture Spec: AI prompt → JSON → canvas (and export back out)
+- Architecture Spec: copyable AI prompt → JSON → canvas (and export back out)
 - Keyboard-first shortcuts (`N`, delete, undo/redo, copy/paste)
+- PNG export; Windows auto-update from GitHub Releases
+
+## Known limitations
+
+- Windows x64 focus (NSIS installer)
+- Maximum **3** collaborators per project
+- Join codes are short share links — not strong passwords
+- Concurrent edits use **last-write-wins** (not CRDT merge)
+- Device identity is local; clearing app data may require rejoining with a code
+- No in-app AI model — Spec is exchanged with tools you already use
 
 ## Architecture Spec (AI bridge)
 
@@ -57,6 +76,17 @@ Product docs  →  any AI  →  Spec JSON  →  Import into canvas
 ```
 
 See [`docs/architecture-spec.md`](docs/architecture-spec.md).
+
+## Docs
+
+| Doc | Purpose |
+|-----|---------|
+| [`docs/architecture-spec.md`](docs/architecture-spec.md) | Spec schema + AI workflow |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common fixes |
+| [`docs/privacy-policy-draft.md`](docs/privacy-policy-draft.md) | Privacy draft (legal review required) |
+| [`docs/release-checklist.md`](docs/release-checklist.md) | Ship checklist |
+| [`docs/commercial-readiness.md`](docs/commercial-readiness.md) | Launch readiness status |
+| [`docs/THIRD-PARTY-NOTICES.md`](docs/THIRD-PARTY-NOTICES.md) | Dependency license summary |
 
 ## Tech stack
 

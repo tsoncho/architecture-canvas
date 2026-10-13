@@ -89,10 +89,31 @@ Think of Spec as a tiny “architecture source file”:
 
 ### Rules
 
+- `version` must be `1` (unsupported versions are rejected)
 - `nodes[].id` must be unique stable strings (`auth-service`, not UUIDs)
 - `edges[].from` / `to` must match node ids
-- `x` / `y` optional — import auto-layouts if missing
+- `x` / `y` optional — import auto-layouts if missing or piled up
 - Colors optional — defaults come from the app palette
+- Unknown top-level fields are ignored; unknown node types are rejected
+- Coordinates must be finite numbers when present
+
+### Limits (enforced on import)
+
+| Limit | Value |
+|-------|-------|
+| JSON size | ~1.5 MB |
+| Nodes | 300 |
+| Edges | 500 |
+| Id length | 64 |
+| Name / technology / label | 120 |
+| Description | 4000 |
+
+### Compatibility
+
+- Current schema version: **1**
+- Export produces version `1` with deterministic node/edge ordering
+- Import validates the entire document before replacing the canvas (undoable)
+- Do not rename or remove fields in v1; add optional fields only in a future version bump
 
 ## In the app
 

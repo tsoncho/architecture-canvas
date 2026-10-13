@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { AppSettings, LocalIdentity, RecentProject } from '@/types'
 
+function createDeviceSecret(): string {
+  const a = crypto.randomUUID().replace(/-/g, '')
+  const b = crypto.randomUUID().replace(/-/g, '')
+  return `ac-${a}${b}`
+}
+
 const IDENTITY_KEY = 'architecture-canvas:identity'
 const SETTINGS_KEY = 'architecture-canvas:settings'
 const RECENT_KEY = 'architecture-canvas:recent'
@@ -53,6 +59,7 @@ type IdentityState = {
   setDisplayName: (name: string) => void
   updateSettings: (patch: Partial<AppSettings>) => void
   ensureIdentity: () => LocalIdentity
+  persistIdentity: (identity: LocalIdentity) => void
 }
 
 export const useIdentityStore = create<IdentityState>((set, get) => ({
@@ -74,7 +81,7 @@ export const useIdentityStore = create<IdentityState>((set, get) => ({
 
   setDisplayName: (name: string) => {
     const identity = get().ensureIdentity()
-    const next = { ...identity, displayName: name.trim() }
+    const next = { ...identity, displayName: name.trim().slice(0, 80) }
     writeJson(IDENTITY_KEY, next)
     set({ identity: next })
     const settings = { ...get().settings, displayName: next.displayName }
@@ -88,12 +95,18 @@ export const useIdentityStore = create<IdentityState>((set, get) => ({
     set({ settings })
   },
 
+  persistIdentity: (identity) => {
+    writeJson(IDENTITY_KEY, identity)
+    set({ identity })
+  },
+
   ensureIdentity: () => {
     const current = get().identity
     if (current) return current
     const next: LocalIdentity = {
       installationId: crypto.randomUUID(),
       displayName: get().settings.displayName || 'Guest',
+      deviceSecret: createDeviceSecret(),
     }
     writeJson(IDENTITY_KEY, next)
     set({ identity: next })

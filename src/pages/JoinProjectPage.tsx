@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useIdentityStore } from '@/stores/identity-store'
 import { joinProject, loadProject } from '@/features/projects/api'
+import { normalizeJoinCode, validateJoinCode } from '@/lib/join-code'
 import { saveSnapshot, upsertRecentProject } from '@/lib/storage/local'
 
 export function JoinProjectPage() {
@@ -19,8 +20,18 @@ export function JoinProjectPage() {
     setBusy(true)
     setError(null)
     try {
-      setDisplayName(name.trim())
-      const project = await joinProject(code, name.trim())
+      const trimmedName = name.trim().slice(0, 80)
+      if (!trimmedName) {
+        setError('Enter your name to join.')
+        return
+      }
+      const codeError = validateJoinCode(code)
+      if (codeError) {
+        setError(codeError)
+        return
+      }
+      setDisplayName(trimmedName)
+      const project = await joinProject(normalizeJoinCode(code), trimmedName)
       const snapshot = await loadProject(project.id)
       await saveSnapshot(snapshot)
       await upsertRecentProject({
@@ -34,8 +45,13 @@ export function JoinProjectPage() {
       navigate(`/project/${project.id}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong.'
-      if (message.toLowerCase().includes('full')) {
+      const lower = message.toLowerCase()
+      if (lower.includes('full')) {
         setError('Project is currently full (3 / 3 people).')
+      } else if (lower.includes('invalid join code') || lower.includes('not found')) {
+        setError('Invalid join code. Check the code and try again.')
+      } else if (lower.includes('not authenticated') || lower.includes('jwt')) {
+        setError('Could not sign in on this device. Check your connection and try again.')
       } else {
         setError(message)
       }

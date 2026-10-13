@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { prepareOutbox } from '@/features/collaboration/outbox'
 import { supabase } from '@/lib/supabase/client'
 import { mapEdge, mapNode, mapProjectMember } from '@/lib/supabase/mappers'
 import {
@@ -62,39 +63,10 @@ function friendlySyncMessage(raw: string): string {
   if (msg.includes('project is currently full')) {
     return 'Project is full (3 people max).'
   }
-  return raw || 'Could not sync'
-}
-
-function outboxRank(item: OutboxItem): number {
-  // Nodes before edges; deletes after writes so FKs stay valid.
-  if (item.table === 'nodes' && item.op !== 'delete') return 0
-  if (item.table === 'edges' && item.op !== 'delete') return 1
-  if (item.table === 'edges' && item.op === 'delete') return 2
-  return 3
-}
-
-/** Last write wins per entity; then order for FK-safe flush. */
-function prepareOutbox(items: OutboxItem[]): {
-  apply: OutboxItem[]
-  discardIds: string[]
-} {
-  const byKey = new Map<string, OutboxItem>()
-  const chronological = [...items].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  )
-  for (const item of chronological) {
-    const id = String(item.payload.id ?? '')
-    if (!id) continue
-    byKey.set(`${item.table}:${id}`, item)
+  if (msg.includes('invalid join code')) {
+    return 'Invalid join code.'
   }
-  const apply = [...byKey.values()].sort((a, b) => {
-    const rank = outboxRank(a) - outboxRank(b)
-    if (rank !== 0) return rank
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  })
-  const keep = new Set(apply.map((i) => i.id))
-  const discardIds = items.filter((i) => !keep.has(i.id)).map((i) => i.id)
-  return { apply, discardIds }
+  return raw || 'Could not sync'
 }
 
 function isFkError(message: string): boolean {

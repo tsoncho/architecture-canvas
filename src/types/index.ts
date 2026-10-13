@@ -81,6 +81,12 @@ export type RecentProject = {
 export type LocalIdentity = {
   installationId: string
   displayName: string
+  /**
+   * Local-only device password for Supabase email auth.
+   * Never synced to the cloud as plaintext outside auth.users.
+   * Losing this (cleared app data) means this install cannot reopen the same cloud identity.
+   */
+  deviceSecret?: string
 }
 
 export type AppSettings = {

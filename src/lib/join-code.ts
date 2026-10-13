@@ -1,9 +1,20 @@
 /** Excludes ambiguous characters: O, 0, I, 1, S, 5 */
 export const JOIN_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRTUVWXY2346789'
 
+export const JOIN_CODE_PATTERN = /^[A-Z2-9]{3}-[A-Z2-9]{3}$/
+
 function randomChar(): string {
-  const index = Math.floor(Math.random() * JOIN_CODE_ALPHABET.length)
-  return JOIN_CODE_ALPHABET[index] ?? 'A'
+  // CSPRNG when available (browser / Node crypto)
+  const bytes = new Uint8Array(1)
+  crypto.getRandomValues(bytes)
+  const alphabetLen = JOIN_CODE_ALPHABET.length
+  let b = bytes[0]!
+  // Reject modulo bias
+  while (b >= 256 - (256 % alphabetLen)) {
+    crypto.getRandomValues(bytes)
+    b = bytes[0]!
+  }
+  return JOIN_CODE_ALPHABET[b % alphabetLen] ?? 'A'
 }
 
 function randomSegment(length: number): string {
@@ -21,4 +32,13 @@ export function generateJoinCode(): string {
 
 export function normalizeJoinCode(input: string): string {
   return input.trim().replace(/\s+/g, '').toUpperCase()
+}
+
+/** Returns null when the code is well-formed after normalization. */
+export function validateJoinCode(input: string): string | null {
+  const normalized = normalizeJoinCode(input)
+  if (!JOIN_CODE_PATTERN.test(normalized)) {
+    return 'Use a code like ABC-123 (letters and digits, with a dash).'
+  }
+  return null
 }

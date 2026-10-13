@@ -1,6 +1,7 @@
 import { NODE_CATALOG, defaultNodeSize } from '@/lib/node-types'
 import type { ArchitectureEdge, ArchitectureNode, NodeType } from '@/types'
 import { ensureSpecLayout } from './layout'
+import { SPEC_LIMITS } from './limits'
 import type {
   ArchitectureSpec,
   ArchitectureSpecEdge,
@@ -22,16 +23,23 @@ function uniqueIds(nodes: ArchitectureNode[]): Map<string, string> {
   const used = new Set<string>()
   const map = new Map<string, string>()
   for (const node of nodes) {
-    let id = slugify(node.name)
+    let id = slugify(node.name).slice(0, SPEC_LIMITS.maxIdLength)
     if (used.has(id)) {
       let n = 2
-      while (used.has(`${id}-${n}`)) n += 1
-      id = `${id}-${n}`
+      while (used.has(`${id}-${n}`.slice(0, SPEC_LIMITS.maxIdLength))) n += 1
+      id = `${id}-${n}`.slice(0, SPEC_LIMITS.maxIdLength)
     }
     used.add(id)
     map.set(node.id, id)
   }
   return map
+}
+
+function clip(value: string | undefined, max: number): string | undefined {
+  if (value == null) return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  return trimmed.slice(0, max)
 }
 
 /** Export current canvas into a portable Architecture Spec. */
@@ -41,34 +49,36 @@ export function exportArchitectureSpec(input: {
   edges: ArchitectureEdge[]
 }): ArchitectureSpec {
   const idMap = uniqueIds(input.nodes)
-  const nodes: ArchitectureSpecNode[] = input.nodes.map((node) => ({
-    id: idMap.get(node.id)!,
-    type: node.type,
-    name: node.name,
-    technology: node.technology || undefined,
-    description: node.description || undefined,
-    color: node.color || undefined,
-    x: Math.round(node.positionX),
-    y: Math.round(node.positionY),
-    width: Math.round(node.width),
-    height: Math.round(node.height),
-  }))
+  const nodes: ArchitectureSpecNode[] = [...input.nodes]
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    .map((node) => ({
+      id: idMap.get(node.id)!,
+      type: node.type,
+      name: node.name.slice(0, SPEC_LIMITS.maxNameLength),
+      technology: clip(node.technology, SPEC_LIMITS.maxTechnologyLength),
+      description: clip(node.description, SPEC_LIMITS.maxDescriptionLength),
+      color: node.color || undefined,
+      x: Math.round(node.positionX),
+      y: Math.round(node.positionY),
+      width: Math.round(node.width),
+      height: Math.round(node.height),
+    }))
 
   const edges: ArchitectureSpecEdge[] = []
-  for (const edge of input.edges) {
+  for (const edge of [...input.edges].sort((a, b) => a.id.localeCompare(b.id))) {
     const from = idMap.get(edge.sourceNodeId)
     const to = idMap.get(edge.targetNodeId)
     if (!from || !to) continue
     edges.push({
       from,
       to,
-      label: edge.label || undefined,
+      label: clip(edge.label, SPEC_LIMITS.maxLabelLength),
     })
   }
 
   return {
     version: 1,
-    name: input.name,
+    name: clip(input.name, SPEC_LIMITS.maxProjectNameLength),
     nodes,
     edges,
   }
@@ -90,8 +100,30 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function requireVersion(raw: unknown): 1 {
+  if (raw === undefined || raw === null) return 1
+  if (typeof raw !== 'number' || !Number.isInteger(raw)) {
+    throw new Error('Architecture Spec "version" must be an integer.')
+  }
+  if (!(SPEC_LIMITS.supportedVersions as readonly number[]).includes(raw)) {
+    throw new Error(
+      `Unsupported Architecture Spec version ${raw}. Supported: ${SPEC_LIMITS.supportedVersions.join(', ')}.`,
+    )
+  }
+  return raw as 1
+}
+
 /** Parse paste/file text into a validated Architecture Spec. */
 export function parseArchitectureSpec(raw: string): ArchitectureSpec {
+  if (typeof raw !== 'string') {
+    throw new Error('Architecture Spec must be text.')
+  }
+  if (raw.length > SPEC_LIMITS.maxJsonBytes) {
+    throw new Error(
+      `Architecture Spec is too large (max ${Math.round(SPEC_LIMITS.maxJsonBytes / 1000)} KB).`,
+    )
+  }
+
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -99,7 +131,7 @@ export function parseArchitectureSpec(raw: string): ArchitectureSpec {
     throw new Error('That does not look like valid JSON.')
   }
 
-  // Allow accidental wrappers: { architecture: {...} } or a bare array of nodes
+  // Allow accidental wrappers: { architecture: {...} }
   if (isRecord(parsed) && isRecord(parsed.architecture)) {
     parsed = parsed.architecture
   }
@@ -108,6 +140,7 @@ export function parseArchitectureSpec(raw: string): ArchitectureSpec {
     throw new Error('Architecture Spec must be a JSON object.')
   }
 
+  const version = requireVersion(parsed.version)
   const nodesRaw = parsed.nodes
   const edgesRaw = parsed.edges ?? []
   if (!Array.isArray(nodesRaw)) {
@@ -115,6 +148,12 @@ export function parseArchitectureSpec(raw: string): ArchitectureSpec {
   }
   if (!Array.isArray(edgesRaw)) {
     throw new Error('"edges" must be an array when present.')
+  }
+  if (nodesRaw.length > SPEC_LIMITS.maxNodes) {
+    throw new Error(`Too many nodes (max ${SPEC_LIMITS.maxNodes}).`)
+  }
+  if (edgesRaw.length > SPEC_LIMITS.maxEdges) {
+    throw new Error(`Too many edges (max ${SPEC_LIMITS.maxEdges}).`)
   }
 
   const nodes: ArchitectureSpecNode[] = []
@@ -128,26 +167,43 @@ export function parseArchitectureSpec(raw: string): ArchitectureSpec {
     const type = asString(item.type)?.trim()
     const name = asString(item.name)?.trim()
     if (!id) throw new Error(`Node #${index + 1} needs an "id".`)
+    if (id.length > SPEC_LIMITS.maxIdLength) {
+      throw new Error(`Node id "${id.slice(0, 24)}…" is too long.`)
+    }
     if (!type || !NODE_TYPES.has(type)) {
       throw new Error(
         `Node "${id}" has unknown type "${type ?? ''}". Allowed: ${[...NODE_TYPES].join(', ')}.`,
       )
     }
     if (!name) throw new Error(`Node "${id}" needs a "name".`)
+    if (name.length > SPEC_LIMITS.maxNameLength) {
+      throw new Error(`Node "${id}" name is too long (max ${SPEC_LIMITS.maxNameLength}).`)
+    }
     if (seen.has(id)) throw new Error(`Duplicate node id "${id}".`)
     seen.add(id)
+
+    const x = asNumber(item.x)
+    const y = asNumber(item.y)
+    const width = asNumber(item.width)
+    const height = asNumber(item.height)
+    if (item.x !== undefined && x === undefined) {
+      throw new Error(`Node "${id}" has a non-finite "x".`)
+    }
+    if (item.y !== undefined && y === undefined) {
+      throw new Error(`Node "${id}" has a non-finite "y".`)
+    }
 
     nodes.push({
       id,
       type: type as NodeType,
-      name,
-      technology: asString(item.technology),
-      description: asString(item.description),
-      color: asString(item.color),
-      x: asNumber(item.x),
-      y: asNumber(item.y),
-      width: asNumber(item.width),
-      height: asNumber(item.height),
+      name: name.slice(0, SPEC_LIMITS.maxNameLength),
+      technology: clip(asString(item.technology), SPEC_LIMITS.maxTechnologyLength),
+      description: clip(asString(item.description), SPEC_LIMITS.maxDescriptionLength),
+      color: asString(item.color)?.trim() || undefined,
+      x,
+      y,
+      width,
+      height,
     })
   }
 
@@ -167,14 +223,14 @@ export function parseArchitectureSpec(raw: string): ArchitectureSpec {
     edges.push({
       from,
       to,
-      label: asString(item.label),
+      label: clip(asString(item.label), SPEC_LIMITS.maxLabelLength),
     })
   }
 
   return {
-    version: 1,
-    name: asString(parsed.name),
-    description: asString(parsed.description),
+    version,
+    name: clip(asString(parsed.name), SPEC_LIMITS.maxProjectNameLength),
+    description: clip(asString(parsed.description), SPEC_LIMITS.maxDescriptionLength),
     nodes,
     edges,
   }
